@@ -798,6 +798,9 @@ bool toxav_video_send_frame(ToxAV *av, uint32_t friend_number, uint16_t width, u
 
 #if 1
 
+    // zugzrev: what does this use of ssrc have to do with the RTP protocol
+    // meaning of ssrc?
+
     if (call->video.first->ssrc < VIDEO_SEND_X_KEYFRAMES_FIRST) {
         //if (call->video.first->ssrc == 0)
         //{
@@ -957,6 +960,7 @@ void callback_bwc(BWController *bwc, uint32_t friend_number, float loss, void *u
 
     LOGGER_DEBUG(call->av->m->log, "Reported loss of %f%%", loss * 100);
 
+    // zugzrev: just to confirm, was this change from 0.01 to 0.1 deliberate?
     /* if less than 10% data loss we do nothing! */
     if (loss < 0.1f) {
         return;
@@ -1380,5 +1384,3 @@ void call_kill_transmission(ToxAVCall *call)
     pthread_mutex_destroy(call->mutex_video);
     pthread_mutex_destroy(call->mutex);
 }
-
-

@@ -80,6 +80,8 @@ typedef char __fail_if_misaligned_1 [ sizeof(struct RTPHeader) == 80 ? 1 : -1 ];
 // #define LOWER_31_BITS(x) (x & ((int)(1L << 31) - 1))
 #define LOWER_31_BITS(x) (uint32_t)(x & 0x7fffffff)
 
+// zugzrev: this is repurposing the extension header bit xe of the RTP
+// standard to indicate a keyframe? Does that make sense?
 
 struct RTPHeaderV3 {
 #ifndef WORDS_BIGENDIAN
@@ -103,6 +105,9 @@ struct RTPHeaderV3 {
     uint16_t sequnum;
     uint32_t timestamp;
     uint32_t ssrc;
+    // zugzrev: RTP standard
+    // https://en.wikipedia.org/wiki/Real-time_Transport_Protocol
+    // has csrc going next
     uint32_t offset_full; /* Data offset of the current part */
     uint32_t data_length_full; /* data length without header, and without packet id */
     uint32_t received_length_full; /* only the receiver uses this field */
@@ -210,5 +215,3 @@ int rtp_stop_receiving(RTPSession *session);
 int rtp_send_data(RTPSession *session, const uint8_t *data, uint32_t length, Logger *log);
 
 #endif /* RTP_H */
-
-

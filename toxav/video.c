@@ -62,6 +62,8 @@ Note
     Valid range for VP9: -8..8
  */
 
+// zugzrev: this seems unrealistically high? And should anyway be set by the
+// client?
 #define VIDEO_BITRATE_INITIAL_VALUE 5000 // initialize encoder with this value. Target bandwidth to use for this stream, in kilobits per second.
 
 
@@ -545,6 +547,7 @@ void vc_iterate(VCSession *vc)
         rc = vpx_codec_decode(vc->decoder, p->data, full_data_len, NULL, MAX_DECODE_TIME_US);
 
         if (rc != VPX_CODEC_OK) {
+            // zugzrev: no #defines for return values 5 and 7?
             if (rc == 5) { // Bitstream not supported by this decoder
                 LOGGER_WARNING(vc->log, "Switching VPX Decoder");
                 video_switch_decoder(vc);
@@ -648,6 +651,7 @@ int vc_reconfigure_encoder(VCSession *vc, uint32_t bit_rate, uint16_t width, uin
         return -1;
     }
 
+    // zugzrev: could call it cfg (no actual conflict)
     vpx_codec_enc_cfg_t cfg2 = *vc->encoder->config.enc;
     vpx_codec_err_t rc;
 
@@ -677,7 +681,7 @@ int vc_reconfigure_encoder(VCSession *vc, uint32_t bit_rate, uint16_t width, uin
 
 
         vpx_codec_ctx_t new_c;
-        vpx_codec_enc_cfg_t  cfg;
+        vpx_codec_enc_cfg_t cfg;
         vc__init_encoder_cfg(vc->log, &cfg, kf_max_dist);
 
         cfg.rc_target_bitrate = bit_rate;

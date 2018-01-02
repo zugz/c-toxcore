@@ -64,6 +64,7 @@ RTPSession *rtp_new(int payload_type, Messenger *m, uint32_t friendnumber,
     retu->friend_number = friendnumber;
 
     // set NULL just in case
+    // zugzrev: no need, calloc does this.
     retu->mp = NULL;
     retu->first_packets_counter = 1;
 
@@ -100,6 +101,7 @@ void rtp_kill(RTPSession *session)
         LOGGER_DEBUG(session->m->log, "Terminated RTP session V3 next_free_entry: %d",
                      (int)session_v3->work_buffer_list->next_free_entry);
 
+        // zugzrev: delete this?
         if (session_v3->work_buffer_list->next_free_entry > 0) {
         }
 
@@ -164,11 +166,12 @@ int rtp_send_data(RTPSession *session, const uint8_t *data, uint32_t length_v3, 
         //
         // use the highest bit (bit 31) to spec. keyframe = 1 / no keyframe = 0
         // if length(31 bits) > 1FFFFFFF then use all bits for length
-        // and assume its a keyframe (most likely is anyway)
+        // and assume it's a keyframe (most likely is anyway)
 
         if (LOWER_31_BITS(length_v3) > 0x1FFFFFFF) {
             is_keyframe = 1;
         } else {
+            // zugzrev: this will necessarily be 0???
             is_keyframe = (length_v3 & (uint32_t)(1L << 31)) != 0; // 1-> is keyframe, 0-> no keyframe
             length_v3 = LOWER_31_BITS(length_v3);
         }
@@ -256,6 +259,8 @@ int rtp_send_data(RTPSession *session, const uint8_t *data, uint32_t length_v3, 
             }
 
             sent += piece;
+            // zugzrev: really ok to just cast to uint16_t? What happens when
+            // length_v3 is really longer than UINT16_MAX?
             header->cpart = net_htons((uint16_t)sent);
 
 // Zoff -- new stuff --
@@ -330,6 +335,7 @@ static struct RTPMessage *new_message(size_t allocate_len, const uint8_t *data, 
     return msg;
 }
 
+// zugzrev: clarify this comment
 //
 // full message len incl. header, data pointer, length of this part without header
 //
@@ -355,7 +361,7 @@ static struct RTPMessage *new_message_v3(size_t allocate_len, const uint8_t *dat
 
     msg->header.pt = (rtp_TypeVideo % 128);
 
-    struct RTPHeaderV3 *header_v3 = (struct RTPHeaderV3 *) & (msg->header);
+    struct RTPHeaderV3 *header_v3 = (struct RTPHeaderV3 *) &(msg->header);
     header_v3->data_length_full = full_data_length; // without header
     header_v3->offset_full = offset;
     header_v3->is_keyframe = is_keyframe;
@@ -373,6 +379,7 @@ static void move_slot(struct RTPWorkBufferList *wkbl, int8_t dst_slot, int8_t sr
 }
 
 
+// zugzrev: explain return values
 static int8_t get_slot(Logger *log, struct RTPWorkBufferList *wkbl, uint8_t is_keyframe,
                        const struct RTPHeaderV3 *header_v3, uint8_t is_multipart)
 {
@@ -466,7 +473,7 @@ static struct RTPMessage *process_frame(Logger *log, struct RTPWorkBufferList *w
 {
     if ((wkbl->work_buffer[0].frame_type == video_frame_type_KEYFRAME) && (slot != 0)) {
         LOGGER_DEBUG(log, "process_frame:KEYFRAME waiting in slot 0");
-        // there is a keyframe waiting in slot 0, dont use the current frame yet
+        // there is a keyframe waiting in slot 0, don't use the current frame yet
         return NULL;
     }
 
@@ -499,6 +506,9 @@ static struct RTPMessage *process_frame(Logger *log, struct RTPWorkBufferList *w
 
     return m_new;
 }
+
+// zugzrev: whole thing with length and length_v3 having different roles is
+// quite confusing - hopefully it's just temporary?
 
 static uint8_t fill_data_into_slot(Logger *log, struct RTPWorkBufferList *wkbl, int8_t slot, uint8_t is_keyframe,
                                    const struct RTPHeaderV3 *header_v3, uint32_t length_v3, uint32_t offset_v3, const uint8_t *data, uint16_t length)
@@ -534,7 +544,7 @@ static uint8_t fill_data_into_slot(Logger *log, struct RTPWorkBufferList *wkbl, 
 
 
         memcpy(
-            (mm2->data + offset_v3),
+            mm2->data + offset_v3,
             data + sizeof(struct RTPHeader),
             (size_t)(length - sizeof(struct RTPHeader))
         );
@@ -582,13 +592,13 @@ int handle_rtp_packet_v3(Messenger *m, uint32_t friendnumber, const uint8_t *dat
 
     RTPSession *session = (RTPSession *)object;
     RTPSessionV3 *session_v3 = (RTPSessionV3 *)object;
-    struct RTPWorkBufferList *work_buffer_list = (struct RTPWorkBufferList *)session_v3->work_buffer_list;
 
     if (session_v3->work_buffer_list == NULL) {
         session_v3->work_buffer_list = (struct RTPWorkBufferList *)calloc(1, sizeof(struct RTPWorkBufferList));
         session_v3->work_buffer_list->next_free_entry = 0;
-        work_buffer_list = (struct RTPWorkBufferList *)session_v3->work_buffer_list;
     }
+
+    struct RTPWorkBufferList *work_buffer_list = (struct RTPWorkBufferList *)session_v3->work_buffer_list;
 
     /*
      *
@@ -986,5 +996,3 @@ NEW_MULTIPARTED:
 
     return 0;
 }
-
-

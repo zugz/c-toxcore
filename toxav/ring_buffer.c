@@ -44,8 +44,7 @@ bool rb_empty(const RingBuffer *b)
 }
 
 /*
- * returns: NULL on success
-            start address of ?? on FAILURE
+ * returns: popped element, or NULL if none.
  */
 void *rb_write(RingBuffer *b, void *p, uint8_t data_type_)
 {
@@ -56,6 +55,10 @@ void *rb_write(RingBuffer *b, void *p, uint8_t data_type_)
     }
 
 // Zoff --
+// zugzrev: problem with doing this - the data_type doesn't get returned when
+// we pop.
+// But actually, afaics this hack with data_type isn't actually used anywhere,
+// so revert it?
     b->data_type = data_type_;
 // Zoff --
 
@@ -134,6 +137,3 @@ uint16_t rb_data(const RingBuffer *b, void **dest)
 
     return i;
 }
-
-
-

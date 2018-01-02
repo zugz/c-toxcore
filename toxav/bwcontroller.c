@@ -90,6 +90,7 @@ BWController *bwc_new(Messenger *m, uint32_t friendnumber,
     retu->cycle.last_sent_timestamp = retu->cycle.last_refresh_timestamp = current_time_monotonic();
     retu->rcvpkt.rb = rb_new(BWC_AVG_PKT_COUNT);
 
+    // not needed - already done by calloc
     retu->cycle.lost = 0;
     retu->cycle.recv = 0;
     retu->packet_loss_counted_cycles = 0;
@@ -124,11 +125,12 @@ void bwc_feed_avg(BWController *bwc, uint32_t bytes)
     return;
 
     uint32_t *packet_length;
-    uint8_t dummy;
+    uint8_t data_type;
 
-    rb_read(bwc->rcvpkt.rb, (void **) &packet_length, &dummy);
+    rb_read(bwc->rcvpkt.rb, (void **) &packet_length, &data_type);
     *packet_length = bytes;
-    rb_write(bwc->rcvpkt.rb, packet_length, 0);
+    // zugzrev: less surprising if we keep the data_type
+    rb_write(bwc->rcvpkt.rb, packet_length, data_type);
 }
 
 /*
@@ -155,6 +157,7 @@ void bwc_add_lost(BWController *bwc, uint32_t bytes_received_ok)
         int i = 0;
 
         for (i = 0; i < BWC_AVG_PKT_COUNT; i ++) {
+            // zugzrev: what do you have against += ? I think it's clearer.
             bytes_received_ok = bytes_received_ok + *(avg_packet_length_array[i]);
 
             if (*(avg_packet_length_array[i])) {
