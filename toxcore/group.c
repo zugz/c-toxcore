@@ -315,7 +315,7 @@ static uint64_t calculate_comp_value(const uint8_t *pk1, const uint8_t *pk2)
     return cmp1 - cmp2;
 }
 
-static bool closest(const Group_c *g, const uint8_t i)
+static bool closest_is_set(const Group_c *g, const uint8_t i)
 {
     assert(i < DESIRED_CLOSE_CONNECTIONS);
     return (g->closest_peers_entry & (1ul << i)) != 0;
@@ -327,12 +327,10 @@ static void set_closest(Group_c *g, const uint8_t i)
     g->closest_peers_entry |= (1ul << i);
 }
 
-
 static void add_closest(Group_c *g, const uint16_t peerindex)
 {
     for (uint8_t i = 0; i < DESIRED_CLOSE_CONNECTIONS; ++i) {
-        if (!closest(g, i)) {
-
+        if (!closest_is_set(g, i)) {
             g->closest_peers[i] = peerindex;
             set_closest(g, i);
             return;
@@ -557,7 +555,7 @@ static void process_dirty_list(Group_Chats *g_c, Group_c *g, int32_t groupnumber
     uint8_t inclose = 0;
 
     for (uint8_t i = 0; i < DESIRED_CLOSE_CONNECTIONS; ++i) {
-        if (closest(g, i)) {
+        if (closest_is_set(g, i)) {
             old_closest_peers[inclose++] = g->closest_peers[i];
         }
     }
@@ -577,7 +575,7 @@ static void process_dirty_list(Group_Chats *g_c, Group_c *g, int32_t groupnumber
     }
 
     for (uint8_t i = 0; i < DESIRED_CLOSE_CONNECTIONS; ++i) {
-        if (closest(g, i)) {
+        if (closest_is_set(g, i)) {
             bool just_added = true;
 
             for (uint8_t j = 0; j < inclose; ++j) {
@@ -694,7 +692,7 @@ static void connect_to_closest(Group_Chats *g_c, int32_t groupnumber, void *user
                 uint8_t k;
 
                 for (k = 0; k < DESIRED_CLOSE_CONNECTIONS; ++k) {
-                    if (closest(g, k) && g->closest_peers[k] == i) {
+                    if (closest_is_set(g, k) && g->closest_peers[k] == i) {
                         k = DESIRED_CLOSE_CONNECTIONS + 100;
                         break;
                     }
@@ -717,7 +715,7 @@ static void connect_to_closest(Group_Chats *g_c, int32_t groupnumber, void *user
     }
 
     for (uint8_t i = 0; i < DESIRED_CLOSE_CONNECTIONS; ++i) {
-        if (!closest(g, i)) {
+        if (!closest_is_set(g, i)) {
             continue;
         }
 
@@ -2292,7 +2290,7 @@ static int handle_packet_online(Group_Chats *g_c, int friendcon_id, const uint8_
     bool in_close = false;
 
     for (uint32_t i = 0; i < DESIRED_CLOSE_CONNECTIONS; ++i) {
-        if (closest(g, i)) {
+        if (closest_is_set(g, i)) {
             Group_Peer *peer_from = &g->peers[g->closest_peers[i]];
 
             if (peer_from->friendcon_id == friendcon_id) {
@@ -2622,7 +2620,7 @@ static uint32_t send_lossy_all_close(const Group_Chats *g_c, int32_t groupnumber
         bool closest_found = false;
 
         for (uint8_t j = 0; j < DESIRED_CLOSE_CONNECTIONS; ++j) {
-            if (closest(g, j) && g->closest_peers[j] == i) {
+            if (closest_is_set(g, j) && g->closest_peers[j] == i) {
                 closest_found = true;
                 ++num_closest;
                 break;
@@ -2683,7 +2681,7 @@ static uint32_t send_lossy_all_close(const Group_Chats *g_c, int32_t groupnumber
 
     for (uint32_t i = 0; i < DESIRED_CLOSE_CONNECTIONS; ++i) {
 
-        if (!closest(g, i)) {
+        if (!closest_is_set(g, i)) {
             continue;
         }
 
