@@ -216,10 +216,10 @@ static Group_c *get_group_c(const Group_Chats *g_c, int32_t groupnumber)
  * TODO(irungentoo): make this more efficient.
  */
 
-static int64_t peer_in_chat(const Group_c *chat, const uint8_t *real_pk)
+static int64_t peer_in_chat(const Group_c *g, const uint8_t *real_pk)
 {
-    for (uint32_t i = 0; i < chat->numpeers; ++i) {
-        if (chat->peers[i].friendcon_id != ALMOST_DELETED_PEER && id_equal(chat->peers[i].real_pk, real_pk)) {
+    for (uint32_t i = 0; i < g->numpeers; ++i) {
+        if (g->peers[i].friendcon_id != ALMOST_DELETED_PEER && id_equal(g->peers[i].real_pk, real_pk)) {
             return i;
         }
     }
@@ -249,11 +249,7 @@ static int32_t get_group_num(const Group_Chats *g_c, const uint8_t *identifier)
 int32_t conference_by_uid(const Group_Chats *g_c, const uint8_t *uid)
 {
     for (uint16_t i = 0; i < g_c->num_chats; ++i) {
-        if (!g_c->chats[i].live) {
-            continue;
-        }
-
-        if (crypto_memcmp(g_c->chats[i].identifier + 1, uid, GROUP_IDENTIFIER_LENGTH - 1) == 0) {
+        if (g_c->chats[i].live && crypto_memcmp(g_c->chats[i].identifier + 1, uid, GROUP_IDENTIFIER_LENGTH - 1) == 0) {
             return i;
         }
     }
@@ -364,11 +360,9 @@ static void add_closest(Group_c *g, const uint16_t peerindex)
     }
 
     if (index < DESIRED_CLOSE_CONNECTIONS) {
-        assert(index < DESIRED_CLOSE_CONNECTIONS);
-
         uint16_t rmpeer = g->closest_peers[index];
         g->closest_peers[index] = peerindex;
-        g->closest_peers_entry |= 1ul << index;
+        set_closest(g, index);
 
         add_closest(g, rmpeer);
     }
@@ -1107,7 +1101,7 @@ int enter_conference(Group_Chats *g_c, int32_t groupnumber)
 
 static Group_c *disconnect_conference(const Group_Chats *g_c, int32_t groupnumber, UnsubscribeType u)
 {
-    if (u) {
+    if (u != UNS_NONE) {
         conference_unsubscribe(g_c, groupnumber, u);
     }
 
@@ -2059,7 +2053,7 @@ static void unsubscribe_peer(Group_Chats *g_c, const uint8_t *conf_id, const uin
             continue;
         }
 
-        if (UNS_FOREVER == u) {
+        if (u == UNS_FOREVER) {
             --g->numjoinpeers;
 
             if (g->numjoinpeers > 0) {
@@ -2068,7 +2062,7 @@ static void unsubscribe_peer(Group_Chats *g_c, const uint8_t *conf_id, const uin
                 free(g->joinpeers);
                 g->joinpeers = nullptr;
             }
-        } else if (UNS_TEMP == u) {
+        } else if (u == UNS_TEMP) {
             jp->unsubscribed = true;
         }
 
@@ -2415,10 +2409,13 @@ static void accept_peers_list(Group_c *g, int32_t groupnumber, const uint8_t *da
     }
 }
 
+/* Returns true if another peer in the group has the same gid as us;
+ * returns false else.
+ */
 static bool self_peer_gid_collision(Group_c *g)
 {
-    uint32_t me = UINT32_MAX;
-    int my_gid = 0;
+    uint32_t our_index = UINT32_MAX;
+    int our_gid = 0;
 
     for (uint32_t i = 0; i < g->numpeers; ++i) {
         if (id_equal(g->real_pk, g->peers[i].real_pk)) {
@@ -2426,14 +2423,14 @@ static bool self_peer_gid_collision(Group_c *g)
                 return false;
             }
 
-            me = i;
-            my_gid = g->peers[i].gid;
+            our_index = i;
+            our_gid = g->peers[i].gid;
             break;
         }
     }
 
     for (uint32_t i = 0; i < g->numpeers; ++i) {
-        if (me != i && my_gid == g->peers[i].gid) {
+        if (our_index != i && our_gid == g->peers[i].gid) {
             return true;
         }
     }
@@ -2595,13 +2592,18 @@ static uint32_t send_message_all_close(const Group_Chats *g_c, int32_t groupnumb
 }
 
 /**
+ * FIXME(zugz): actually this sends to the closest peer on each side, and to 
+ * any other peers to whom we have connections but which aren't any of the 
+ * closest four (see keep_connection). Is the latter behaviour actually 
+ * desired?
+ *
  * Send message to all close except \p except_peer (if \p except_peer isn't INVALID_PEER_INDEX)
  * NOTE: this function appends the group chat number to the data passed to it.
  *
  * @return number of messages sent.
  */
 static uint32_t send_lossy_all_close(const Group_Chats *g_c, int32_t groupnumber, const uint8_t *data, uint16_t length,
-                                     uint16_t receiver)
+                                     uint16_t except_peer)
 {
     const Group_c *g = get_group_c(g_c, groupnumber);
 
@@ -2613,7 +2615,7 @@ static uint32_t send_lossy_all_close(const Group_Chats *g_c, int32_t groupnumber
     uint8_t num_closest = 0;
 
     for (uint32_t i = 0; i < g->numpeers; ++i) {
-        if (!really_connected(&g->peers[i]) || i == receiver) {
+        if (!really_connected(&g->peers[i]) || i == except_peer) {
             continue;
         }
 
@@ -2646,13 +2648,13 @@ static uint32_t send_lossy_all_close(const Group_Chats *g_c, int32_t groupnumber
 
     for (uint32_t i = 0; i < DESIRED_CLOSE_CONNECTIONS; ++i) {
 
-        if (!closest(g, i)) {
+        if (!closest_is_set(g, i)) {
             continue;
         }
 
         uint16_t peer_index = g->closest_peers[i];
 
-        if (peer_index == receiver) {
+        if (peer_index == except_peer) {
             continue;
         }
 
@@ -2687,7 +2689,7 @@ static uint32_t send_lossy_all_close(const Group_Chats *g_c, int32_t groupnumber
 
         uint16_t peer_index = g->closest_peers[i];
 
-        if (peer_index == receiver) {
+        if (peer_index == except_peer) {
             continue;
         }
 
@@ -3231,7 +3233,7 @@ static int8_t lossy_packet_not_received(Group_c *g, int64_t peer_index, uint16_t
         lossy->bottom_lossy_number = (message_number - MAX_LOSSY_COUNT) + 1;
         lossy->recv_lossy[message_number % MAX_LOSSY_COUNT] = 1;
     } else {
-        for (size_t i = lossy->bottom_lossy_number; i != (lossy->bottom_lossy_number + top_distance); ++i) {
+        for (uint16_t i = lossy->bottom_lossy_number; i != (lossy->bottom_lossy_number + top_distance); ++i) {
             lossy->recv_lossy[i % MAX_LOSSY_COUNT] = 0;
         }
 
@@ -3292,7 +3294,7 @@ static int handle_lossy(void *object, int friendcon_id, const uint8_t *data, uin
         return -1;
     }
 
-    if (lossy_packet_not_received(g, peer_index, message_number)) {
+    if (lossy_packet_not_received(g, peer_index, message_number) != 0) {
         return -1;
     }
 
@@ -3462,12 +3464,10 @@ static Group_Join_Peer *keep_join_mode(Group_Chats *g_c, Group_c *g, uint64_t ct
             && !jd->unsubscribed) {
         next_time = KEEP_JOIN_ATTEMPT_DELAY_MS;
 
-        const int mcount = g->numpeers; /* 1 - me */
-
         bool present = false;
 
-        for (int m = 0; m < mcount; ++m) {
-            if (id_equal(g->peers[m].real_pk, jd->real_pk)) {
+        for (uint32_t i = 0; i < g->numpeers; ++i) {
+            if (id_equal(g->peers[i].real_pk, jd->real_pk)) {
                 next_time = 1000;
                 present = true;
                 break;
