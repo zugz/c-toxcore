@@ -1,0 +1,64 @@
+New packets:
+    GROUP_MESSAGE_UNSUBSCRIBE_ID
+        1 UnsubscribeType
+        ? UID
+        ? pubkey of sender
+        FIXME: describe
+    GROUP_MESSAGE_NICKNAME_ID
+        Requests sending nick (rename to GROUP_MESSAGE_NICK_REQUEST_ID?)
+    PEER_GROUP_NUM_ID
+        Packed list of the real_pks and group_numbers of all the peers in a 
+        group chat
+        TODO: we get to give group numbers of peers - is this abusable?
+
+    INVITE_MYGROUP_ID
+        Used to reset group number of existing group?
+        Rename?
+        
+    INVITE_UNSUBSCRIBE_ID
+        1 INVITE_UNSUBSCRIBE_ID
+        ? UID
+        ? pubkey of sender
+
+online packet handling has changed:
+    * peer queries are now sent whenever the peer's stored group number is not 
+      the one in the packet, i.e. FIXME when?
+    * online packet is now not sent back if the peer is already one of our 
+      closest for the group
+    * FIXME: something about need_send_peers
+
+per-type message numbers:
+    * FIXME describe and explain
+
+keep_connection:
+    * FIXME describe and explain
+
+relaying:
+    * spec says we don't send message back to sender when it's in closest, but 
+      in master we do, and in pgc we do iff it's a chat msg or an action.
+    * why?
+
+invite response handling:
+    this passage should be replaced "When a peer receives an invite response 
+    packet they will check if the group id..."
+
+save state:
+    new section
+
+how it works:
+    to connect to a saved group, we send unsolicited Invite Response packets 
+    to our friends who were in that group with guessed group numbers.
+
+    We save the public key of any peer who has ever been in the group, 
+    deleting them only if we get an explicit "unsubscribe" packet (not sent by 
+    old clients).
+
+    ...
+
+terminology:
+    * "peer numbers" are now called "peer gids"
+      (intention being to differentiate them from group numbers of other 
+      peers?)
+      Problem: in unix, and etymologically, a gid identifies the group, not a 
+      member of the group.
+      Maybe call them peer ids?
