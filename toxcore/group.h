@@ -65,7 +65,7 @@ typedef struct {
     unsigned    title_changed : 1; /* peer changed the group title */
     unsigned    auto_join : 1; /* peer was added unilaterally in order to restore the group, and we have not yet learnt the peer's gid */
     unsigned    need_send_peers : 1; /* peer may not have up-to-date information on our peers */
-    unsigned    connected : 1; /* friend connection to peer is connected */
+    unsigned    connected : 1; /* friend connection to peer is connected - FIXME discuss locking? */
 } Group_Peer;
 
 /* peer to be used when trying to restore a group */
@@ -81,6 +81,7 @@ typedef struct {
 #define GROUP_IDENTIFIER_LENGTH (1 + CRYPTO_SYMMETRIC_KEY_SIZE) /* type + CRYPTO_SYMMETRIC_KEY_SIZE so we can use new_symmetric_key(...) to fill it */
 
 typedef struct {
+    // FIXME(zugz): explain why we need both peers and peers_list
     Group_Peer *peers;
     Group_Join_Peer *joinpeers;
     uint16_t *peers_list; /* list of indices to peers */
@@ -103,26 +104,27 @@ typedef struct {
     void (*peer_on_leave)(void *, uint32_t, void *);
     void (*group_on_delete)(void *, uint32_t);
 
+    // TODO(zugz) split identifier into UID and type as separate fields?
     uint8_t identifier[GROUP_IDENTIFIER_LENGTH]; /* group type followed by group UID */
 
     unsigned closest_peers_entry : DESIRED_CLOSE_CONNECTIONS; /* ith bit indicates whether closest_peers[i] is set */
     unsigned live : 1; /* struct refers to an actual group; else, it is dead memory waiting to be reallocated */
-    unsigned join_mode : 1;
-    unsigned fake_join : 1;
+    unsigned join_mode : 1; /* trying to restore the group - FIXME(zugz) clarify */
+    unsigned fake_join : 1; /* XXX HACK - see https://github.com/isotoxin/toxcore-vs/issues/4 */
     unsigned auto_join : 1; /* in the process of trying to join the group by sending an unsolicited Invite Response */
 
     unsigned title_len : 8;
     unsigned lossy_message_number : 16;
 
-    signed keep_join_index : 24;
+    signed keep_join_index : 24; // FIXME(zugz) describe
 
     unsigned need_send_name : 1;
     unsigned dirty_list : 1;
     unsigned title_changed : 1;
-    unsigned invite_called : 1;
-    unsigned keep_leave : 1;
+    unsigned invite_called : 1; /* XXX HACK - see https://github.com/isotoxin/toxcore-vs/issues/4 */
+    unsigned keep_leave : 1; // FIXME(zugz) describe
     unsigned disable_auto_join : 1; /* don't try to restore group */
-    unsigned nick_changed : 1;
+    unsigned nick_changed : 1; /* some peer may have nick_changed true  FIXME(zugz) not quite accurate */
 } Group_c;
 
 typedef void g_conference_invite_cb(Messenger *, uint32_t, int, const uint8_t *, size_t, void *);
@@ -217,7 +219,9 @@ int add_groupchat(Group_Chats *g_c, uint8_t type, const uint8_t *uid /*can be NU
  */
 int del_groupchat(Group_Chats *g_c, int groupnumber);
 
+// FIXME(zugz) document
 int enter_conference(Group_Chats *g_c, int groupnumber);
+// FIXME(zugz) document
 int leave_conference(Group_Chats *g_c, int groupnumber, bool keep_leave);
 
 /* Copy the public key of peer_index who is in groupnumber to pk.

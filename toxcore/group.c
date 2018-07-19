@@ -267,6 +267,7 @@ int32_t conference_by_uid(const Group_Chats *g_c, const uint8_t *uid)
 static int64_t get_peer_index(const Group_c *g, uint16_t peer_gid)
 {
     for (uint32_t i = 0; i < g->numpeers; ++i) {
+        // FIXME(zugz): should check for ALMOST_DELETED_PEER?
         if (g->peers[i].gid == (int)peer_gid) {
             return i;
         }
@@ -471,6 +472,8 @@ static void process_dirty_list(Group_Chats *g_c, Group_c *g, int32_t groupnumber
         }
 
         /* remove empty slots in peers */
+        // FIXME(zugz): should be doing this even if empty_slots_in_list == 0
+        // (consider case that one peer is deleted and one added)
         for (uint32_t i = 0; i < g->numpeers;) {
             Group_Peer *peer = &g->peers[i];
 
@@ -480,6 +483,8 @@ static void process_dirty_list(Group_Chats *g_c, Group_c *g, int32_t groupnumber
             }
 
             --g->numpeers;
+            // |FIXME(zugz): should break if (i == g->numpeers), because this
+            // memcpy is then illegal
             memcpy(peer, &g->peers[g->numpeers], sizeof(Group_Peer));
 
             /* fix index in peers_list */
@@ -525,6 +530,8 @@ static void process_dirty_list(Group_Chats *g_c, Group_c *g, int32_t groupnumber
     /* Now notify client by calling callbacks */
     if (some_changes) {
         if (!g->invite_called && !g->join_mode && g_c->invite_callback) {
+            /* Hack to give client a chance to react to a restored group.
+             * FIXME(zugz): see https://github.com/isotoxin/toxcore-vs/issues/4 */
             g->fake_join = true;
             g_c->invite_callback(g_c->m, UINT32_MAX, g->identifier[0], g->identifier + 1, GROUP_IDENTIFIER_LENGTH - 1, userdata);
             g->fake_join = false;
@@ -539,6 +546,7 @@ static void process_dirty_list(Group_Chats *g_c, Group_c *g, int32_t groupnumber
             g_c->peer_list_changed_callback(g_c->m, groupnumber, userdata);
         }
 
+        // FIXME(zugz): why?
         g->nick_changed = false;
     }
 
@@ -758,6 +766,7 @@ static void connect_to_closest(Group_Chats *g_c, int32_t groupnumber, void *user
     }
 
 
+    // FIXME(zugz): this has nothing to do with closest; move somewhere else.
     if (g->need_send_name) {
         group_name_send(g_c, groupnumber, g_c->m->name, g_c->m->name_length);
     }
@@ -888,6 +897,7 @@ static int64_t addpeer(Group_c *g, int32_t groupnumber, const uint8_t *real_pk, 
     init_group_peer(new_peer, real_pk, temp_pk, peer_gid);
 
     /* set undefined for other */
+    // FIXME(zugz) check groupnumber >= 0?
     new_peer->group_number = id_equal(g->real_pk, real_pk) ? (uint16_t)groupnumber : INVALID_GROUP_NUMBER;
 
     if (peer_gid >= 0) {
@@ -1022,6 +1032,8 @@ static bool settitle(Group_c *g, int64_t peer_index, const uint8_t *title, uint8
         g->peers[peer_index].title_changed = true;
     }
 
+    // FIXME(zugz) why not call title change callbacks immediately?
+
     return true;
 }
 
@@ -1066,6 +1078,7 @@ int add_groupchat(Group_Chats *g_c, uint8_t type, const uint8_t *uid)
 }
 
 /* start trying to restore the group
+ * FIXME(zugz): rename to "start_restore"?
  */
 static void on_offline(Group_c *g)
 {
@@ -1075,8 +1088,8 @@ static void on_offline(Group_c *g)
     g->need_send_name = false;
     g->title_changed = false;
     g->invite_called = false;
-    g->keep_leave = false;
-    g->disable_auto_join = false;
+    g->keep_leave = false; // FIXME(zugz): bug?
+    g->disable_auto_join = false; // FIXME(zugz): bug?
     g->keep_join_index = -1;
 
     for (uint16_t i = 0; i < g->numjoinpeers; ++i) {
@@ -1096,6 +1109,7 @@ int enter_conference(Group_Chats *g_c, int32_t groupnumber)
     }
 
     if (!g->disable_auto_join) {
+        // FIXME(zugz) explain (ends up as TOX_ERR_CONFERENCE_ENTER_ALREADY)
         return -2;
     }
 
@@ -1172,6 +1186,7 @@ int leave_conference(Group_Chats *g_c, int groupnumber, bool keep_leave)
     g->keep_leave = keep_leave;
 
     if (g->disable_auto_join) {
+        // FIXME(zugz) explain (ends up as TOX_ERR_CONFERENCE_LEAVE_ALREADY)
         return -2;
     }
 
@@ -1500,6 +1515,8 @@ int invite_friend(Group_Chats *g_c, int32_t friendnumber, int groupnumber)
  *
  * expected_type is the groupchat type we expect the chat we are joining to have.
  *
+ * FIXME(zugz) explain role of data
+ *
  * return group number on success.
  * return -1 if data length is invalid.
  * return -2 if group is not the expected type.
@@ -1512,6 +1529,7 @@ int join_groupchat(Group_Chats *g_c, int32_t friendnumber, uint8_t expected_type
 {
     if (length == GROUP_IDENTIFIER_LENGTH - 1) {
         // This branch is for "fake invites".
+        // FIXME(zugz): explain (incl. role of fake_join)
         int groupnumber = conference_by_uid(g_c, data);
 
         if (groupnumber != -1) {
@@ -1581,6 +1599,7 @@ int join_groupchat(Group_Chats *g_c, int32_t friendnumber, uint8_t expected_type
         if (just_created) {
             memcpy(g->identifier, data + sizeof(uint16_t), GROUP_IDENTIFIER_LENGTH);
             g->invite_called = true; /* just created means client called join_groupchat */
+            // FIXME(zugz) clarify
         }
 
         uint16_t other_groupnum = 0;
@@ -1600,6 +1619,7 @@ int join_groupchat(Group_Chats *g_c, int32_t friendnumber, uint8_t expected_type
         }
 
         if (g->auto_join) {
+            // FIXME(zugz) explain
             g->peers[peer_index].auto_join = true;
             friend_connection_callbacks(g_c->m->fr_c, friendcon_id, GROUPCHAT_CALLBACK_INDEX, &g_handle_status,
                                         &g_handle_packet, &handle_lossy, g_c, friendcon_id);
@@ -1653,6 +1673,7 @@ void group_lossy_packet_registerhandler(Group_Chats *g_c, uint8_t byte, int (*fu
 
 /* Set the callback for group invites.
  *
+ *  FIXME(zugz) incorrect types here; similarly in subsequent callback comments.
  *  Function(Group_Chats *g_c, int32_t friendnumber, uint8_t type, uint8_t *data, uint16_t length, void *userdata)
  *
  *  data of length is what needs to be passed to join_groupchat().
@@ -1834,6 +1855,7 @@ static void change_self_peer_gid(Group_Chats *g_c, int32_t groupnumber, int self
     }
 
     /* no self peer found! Add it */
+    // FIXME(zugz) how can this happen?
 
     int64_t peer_index = addpeer(g, groupnumber, g->real_pk, dht_get_self_public_key(g_c->m->dht), self_peer_gid);
 
@@ -1857,6 +1879,7 @@ static int group_new_peer_send(Group_Chats *g_c, int32_t groupnumber, uint16_t p
     memcpy(packet + sizeof(uint16_t), real_pk, CRYPTO_PUBLIC_KEY_SIZE);
     memcpy(packet + sizeof(uint16_t) + CRYPTO_PUBLIC_KEY_SIZE, temp_pk, CRYPTO_PUBLIC_KEY_SIZE);
 
+    // FIXME(zugz) what does this mean?
     /* make self gid valid due self is inviter */
     const Group_c *g = g_c->chats + groupnumber;
 
@@ -1929,6 +1952,7 @@ static void send_peer_nums(const Group_Chats *g_c, int32_t groupnumber, int frie
     }
 }
 
+// FIXME(zugz): rename to group_kill_self_send?
 static Group_c *group_kill_peer_send(const Group_Chats *g_c, int32_t groupnumber)
 {
     Group_c *g = get_group_c(g_c, groupnumber);
@@ -2045,6 +2069,7 @@ int group_title_get(const Group_Chats *g_c, int groupnumber, uint8_t *title)
     return g->title_len;
 }
 
+// FIXME(zugz) describe
 static void unsubscribe_peer(Group_Chats *g_c, const uint8_t *conf_id, const uint8_t *peer_pk, UnsubscribeType u)
 {
     Group_c *g = get_group_c(g_c, conference_by_uid(g_c, conf_id));
@@ -2130,6 +2155,7 @@ static void handle_friend_invite_packet(Messenger *m, uint32_t friendnumber, con
                                          invite_data, invite_length, userdata);
                 }
             } else {
+                // FIXME(zugz) explain this, and INVITE_MYGROUP_ID
                 Group_c *g = get_group_c(g_c, groupnumber);
 
                 if (g->keep_leave) {
@@ -2163,6 +2189,10 @@ static void handle_friend_invite_packet(Messenger *m, uint32_t friendnumber, con
                 uint8_t nosuchgroup[GROUP_IDENTIFIER_LENGTH + CRYPTO_PUBLIC_KEY_SIZE];
                 nosuchgroup[0] = INVITE_UNSUBSCRIBE_ID;
                 memcpy(nosuchgroup + 1, conference_id, GROUP_IDENTIFIER_LENGTH - 1);
+                // |FIXME(zugz) should write as
+                //   nosuchgroup + 1 + (GROUP_IDENTIFIER_LENGTH - 1)
+                // or (better) add #define for GROUP_UID_LENGTH
+                // similarly everywhere unsubscribe packets are decoded
                 memcpy(nosuchgroup + GROUP_IDENTIFIER_LENGTH, nc_get_self_public_key(g_c->m->net_crypto),
                        CRYPTO_PUBLIC_KEY_SIZE);
                 send_conference_invite_packet(g_c->m, friendnumber, nosuchgroup, sizeof(nosuchgroup));
@@ -2196,12 +2226,20 @@ static void handle_friend_invite_packet(Messenger *m, uint32_t friendnumber, con
 
             int64_t peer_index = addpeer(g, groupnumber, real_pk, temp_pk, peer_gid);
 
+            // FIXME(zugz) should be checking that peer_index >= 0, surely?
             if (g->peers[peer_index].friendcon_id != friendcon_id) {
+                // FIXME(zugz) explain how this can happen
                 if (g->peers[peer_index].friendcon_id >= 0) {
                     kill_friend_connection(g_c->fr_c, g->peers[peer_index].friendcon_id);
                     g->peers[peer_index].friendcon_id = -1;
                 }
 
+                // FIXME(zugz) if we check that (friendcon_id >= 0) before
+                // doing this (which surely we should anyway), and also set
+                // connected to false after setting friendcon_id to -1 just
+                // above, we would have the invariant
+                //   connected ==> (friendcon_id >= 0)
+                // and so could delete a condition from really_connected()
                 g->peers[peer_index].friendcon_id = friendcon_id;
                 g->peers[peer_index].connected = true;
                 friend_connection_lock(g_c->fr_c, friendcon_id);
@@ -2215,8 +2253,9 @@ static void handle_friend_invite_packet(Messenger *m, uint32_t friendnumber, con
             g->need_send_name = true;
             group_new_peer_send(g_c, groupnumber, peer_gid, real_pk, temp_pk);
 
+            // FIXME(zugz) explain
             g->join_mode = false;
-            g->keep_leave = false;
+            g->keep_leave = false; // FIXME(zugz): misleading; g->keep_leave must already be false
             g->disable_auto_join = false;
             break;
         }
@@ -2395,6 +2434,7 @@ static void accept_peers_list(Group_c *g, int32_t groupnumber, const uint8_t *da
         peer_gid = net_ntohs(peer_gid);
         d += sizeof(uint16_t);
         int64_t peer_index = addpeer(g, groupnumber, d, d + CRYPTO_PUBLIC_KEY_SIZE, peer_gid);
+        /* ^FIXME(zugz): this can readd a peer who has left the group */
 
         if (peer_index == -1) {
             return;
@@ -2492,7 +2532,8 @@ static void handle_direct_packet(Group_Chats *g_c, int32_t groupnumber, const ui
             int self_peer_gid = get_self_peer_gid(g);
             uint32_t old_peers_num = g->numpeers;
 
-            g->keep_leave = false;
+            // FIXME(zugz) explain
+            g->keep_leave = false; // FIXME(zugz): bug?
             g->disable_auto_join = false;
             g->join_mode = false;
 
@@ -2509,6 +2550,8 @@ static void handle_direct_packet(Group_Chats *g_c, int32_t groupnumber, const ui
                 change_self_peer_gid(g_c, groupnumber, self_peer_gid);
 
                 if (self_peer_gid_collision(g)) {
+                    // FIXME(zugz) this changes our gid, but below we continue
+                    // to use self_peer_gid. Is it a bug?
                     change_self_peer_gid(g_c, groupnumber, find_new_peer_gid(g));
                 }
 
@@ -2559,6 +2602,10 @@ static void handle_direct_packet(Group_Chats *g_c, int32_t groupnumber, const ui
 }
 
 /**
+ * FIXME(zugz): do we want this '\p' and '@return' notation?
+ * FIXME(zugz): rename to send_message_all_connected? The purpose is to send
+ * to all closest, but actually we send to all connected peers.
+ *
  * Send message to all close except \p except_peer (if \p except_peer isn't INVALID_PEER_INDEX)
  * NOTE: this function appends the group chat number to the data passed to it.
  *
@@ -2596,9 +2643,9 @@ static uint32_t send_message_all_close(const Group_Chats *g_c, int32_t groupnumb
 }
 
 /**
- * FIXME(zugz): actually this sends to the closest peer on each side, and to 
- * any other peers to whom we have connections but which aren't any of the 
- * closest four (see keep_connection). Is the latter behaviour actually 
+ * FIXME(zugz): actually this sends to the closest peer on each side, and to
+ * any other peers to whom we have connections but which aren't any of the
+ * closest four (see keep_connection). Is the latter behaviour actually
  * desired?
  *
  * Send message to all close except \p except_peer (if \p except_peer isn't INVALID_PEER_INDEX)
@@ -2942,6 +2989,8 @@ static void handle_message_packet_group(Group_Chats *g_c, int groupnumber, const
         }
 
         if (message_number < g->peers[index].last_message_number[pindex]) {
+            // FIXME(zugz) but surely we shouldn't expect to always receive
+            // packets (even with the same pindex) in order?
             /* accept only increasing message numbers to avoid infinite loops */
             return;
         }
@@ -2961,6 +3010,8 @@ static void handle_message_packet_group(Group_Chats *g_c, int groupnumber, const
 
             if (peer->nick_len == 0 && peer->gid >= 0) {
                 /* empty nick */
+                /* FIXME(zugz): this causes a lot of traffic if a peer
+                 * actually has an empty nick */
                 nick_request_send(g_c, groupnumber, peer->gid);
             }
 
@@ -2988,6 +3039,8 @@ static void handle_message_packet_group(Group_Chats *g_c, int groupnumber, const
             memcpy(&new_peer_gid, msg_data, sizeof(uint16_t));
             new_peer_gid = net_ntohs(new_peer_gid);
 
+            // FIXME(zugz) should we check more generally that the
+            // new_peer_gid doesn't already exist?
             if (from_peer_gid == new_peer_gid) {
                 allow_resend = false;
             }
@@ -2996,9 +3049,10 @@ static void handle_message_packet_group(Group_Chats *g_c, int groupnumber, const
             const uint8_t *temp_pk = real_pk + CRYPTO_PUBLIC_KEY_SIZE;
 
             if (id_equal(g->real_pk, real_pk)) {
+                // FIXME(zugz) explain
                 allow_resend = false;
                 g->need_send_name = true;
-                g->keep_leave = false;
+                g->keep_leave = false; // FIXME(zugz): bug?
                 g->disable_auto_join = false;
                 g->join_mode = false;
             }
@@ -3028,6 +3082,7 @@ static void handle_message_packet_group(Group_Chats *g_c, int groupnumber, const
             Group_Peer *self = get_self_peer(g);
 
             if (self && gid == self->gid) {
+                // FIXME(zugz): why?
                 self->nick_changed = true;
                 g->nick_changed = true;
             }
@@ -3456,6 +3511,7 @@ static bool possible_groupnum(Group_Chats *g_c, Group_c *ig, uint16_t gn, const 
     return true;
 }
 
+// FIXME(zugz) describe
 static Group_Join_Peer *keep_join_mode(Group_Chats *g_c, Group_c *g, uint64_t ct)
 {
     if (g->keep_join_index < 0) {
@@ -3578,6 +3634,7 @@ static void set_next_join_try(Group_Chats *g_c, const uint8_t *real_pk, uint64_t
     }
 }
 
+// FIXME(zugz) describe
 static void restore_conference(Group_Chats *g_c)
 {
     uint64_t now = current_time_monotonic();
@@ -3651,6 +3708,7 @@ static void restore_conference(Group_Chats *g_c)
 
         if (!at_max && !on_try) {
             /* keep_join_index */
+            // FIXME(zugz) explain
 
             for (uint16_t i = 0; i < g_c->num_chats; ++i) {
                 g = get_group_c(g_c, i);
@@ -3728,6 +3786,7 @@ static int ping_groupchat(Group_Chats *g_c, int groupnumber)
             g->last_sent_ping = unix_time();
         } else {
             /* no peers to ping */
+            // FIXME(zugz): yuck
             g->last_sent_ping = unix_time() - GROUP_PING_INTERVAL + 2;
         }
 
@@ -3840,6 +3899,8 @@ void do_groupchats(Group_Chats *g_c, void *userdata)
         }
 
         if (g->disable_auto_join) {
+            // FIXME(zugz) why different order from below??
+            // move this out of the conditional?
             groupchat_clear_timedout(g_c, i, userdata);
             apply_changes_in_peers(g_c, i, userdata);
             continue;
@@ -3940,6 +4001,7 @@ static void conferences_save(const Messenger *m, uint8_t *data)
 {
     Group_Chats *g_c = (Group_Chats *)m->conferences_object;
 
+    // FIXME(zugz): need to convert num to little-endian
     uint16_t *num = (uint16_t *)data;
     *num = 0;
     data += sizeof(uint16_t);
@@ -3969,6 +4031,7 @@ static void conferences_save(const Messenger *m, uint8_t *data)
         memcpy(data, g->title, g->title_len);
         data += g->title_len;
 
+        // FIXME(zugz): according to spec, should be saving as little-endian
         data += net_pack_u16(data, g->numjoinpeers);
 
         for (uint16_t j = 0; j < g->numjoinpeers; ++j) {
@@ -4025,6 +4088,7 @@ static int conferences_load(Messenger *m, const uint8_t *data, uint32_t length)
         ++data;
         --length;
 
+        // FIXME(zugz): should be g->title_len, presumably?
         if (*data > sizeof(g->title)) {
             del_groupchat_internal(g_c, groupnumber, UNS_NONE);
             return -1;
@@ -4043,6 +4107,7 @@ static int conferences_load(Messenger *m, const uint8_t *data, uint32_t length)
         data += g->title_len;
         length -= g->title_len;
 
+        // FIXME(zugz): see above
         net_unpack_u16(data, &g->numjoinpeers);
         data += sizeof(uint16_t);
         length -= sizeof(uint16_t);
