@@ -230,7 +230,7 @@ static int64_t peer_in_chat(const Group_c *g, const uint8_t *real_pk)
 /*
  * check if group with identifier is in group array.
  *
- * return group number if peer is in list.
+ * return group number if group is in list.
  * return -1 if group is not in list.
  *
  * TODO(irungentoo): make this more efficient.
@@ -414,7 +414,7 @@ static void process_dirty_list(Group_Chats *g_c, Group_c *g, int32_t groupnumber
 
     uint32_t new_size_of_list = 0;
 
-    /* Put new peers to just deleted slots */
+    /* Put new peers in just deleted slots */
     for (uint32_t i = 0; i < g->numpeers; ++i) {
         const Group_Peer *peer = &g->peers[i];
 
@@ -454,7 +454,7 @@ static void process_dirty_list(Group_Chats *g_c, Group_c *g, int32_t groupnumber
 
     if (empty_slots_in_list > 0) {
         /* all new peers were put into empty slots, so there are no new peers */
-        /* just remove empty slots both in peers_list and peers*/
+        /* just remove empty slots both in peers_list and peers */
 
         /* remove empty slots in peers_list */
         for (uint32_t j = 0; j < g->numpeers_in_list;) {
@@ -465,9 +465,8 @@ static void process_dirty_list(Group_Chats *g_c, Group_c *g, int32_t groupnumber
 
             --g->numpeers_in_list;
             /* g->peers_list[j] = g->peers_list[g->numpeers_in_list]; */ /* faster */
-            // TODO(iphydf): Why is this "accurate"?
             memmove(&g->peers_list[j], &g->peers_list[j + 1],
-                    sizeof(uint16_t) * (g->numpeers_in_list - j)); /* slower, but accurate */
+                    sizeof(uint16_t) * (g->numpeers_in_list - j)); /* slower, but preserves order */
             some_changes = true;
         }
 
@@ -837,6 +836,9 @@ static void init_group_peer(Group_Peer *p, const uint8_t *real_pk, const uint8_t
     p->last_recv = unix_time();
 }
 
+/* Add a new peer, or update the temp_pk and gid of an existing peer.
+ * Returns the index of the new or existing peer,
+ * or -1 on failure. */
 static int64_t addpeer(Group_c *g, int32_t groupnumber, const uint8_t *real_pk, const uint8_t *temp_pk, int peer_gid)
 {
     if (peer_gid >= 0) {
@@ -1063,6 +1065,8 @@ int add_groupchat(Group_Chats *g_c, uint8_t type, const uint8_t *uid)
     return (int)groupnumber;
 }
 
+/* start trying to restore the group
+ */
 static void on_offline(Group_c *g)
 {
     g->join_mode = true;
@@ -1494,7 +1498,7 @@ int invite_friend(Group_Chats *g_c, int32_t friendnumber, int groupnumber)
 
 /* Join a group (you need to have been invited first.)
  *
- * expected_type is the groupchat type we expect the chat we are joining is.
+ * expected_type is the groupchat type we expect the chat we are joining to have.
  *
  * return group number on success.
  * return -1 if data length is invalid.
@@ -1507,6 +1511,7 @@ int invite_friend(Group_Chats *g_c, int32_t friendnumber, int groupnumber)
 int join_groupchat(Group_Chats *g_c, int32_t friendnumber, uint8_t expected_type, const uint8_t *data, uint16_t length)
 {
     if (length == GROUP_IDENTIFIER_LENGTH - 1) {
+        // This branch is for "fake invites".
         int groupnumber = conference_by_uid(g_c, data);
 
         if (groupnumber != -1) {
@@ -1515,7 +1520,7 @@ int join_groupchat(Group_Chats *g_c, int32_t friendnumber, uint8_t expected_type
             return groupnumber;
         }
 
-        /* create groupchat with exist id */
+        /* create groupchat with given type and uid */
         return add_groupchat(g_c, expected_type, data);
     }
 
@@ -1886,7 +1891,9 @@ static int conference_unsubscribe(const Group_Chats *g_c, int32_t groupnumber, U
     return -1;
 }
 
-
+/* Send a packed list of the real_pks and group_numbers of all the peers in a
+ * group chat.
+ */
 static void send_peer_nums(const Group_Chats *g_c, int32_t groupnumber, int friendcon_id, uint16_t other_group_num)
 {
     const Group_c *g = get_group_c(g_c, groupnumber);
@@ -2070,6 +2077,8 @@ static void unsubscribe_peer(Group_Chats *g_c, const uint8_t *conf_id, const uin
     }
 }
 
+/* Set group number of a peer if it is currently unset
+ */
 static void set_peer_groupnum(Group_c *g, const uint8_t *peer_pk, uint16_t gn)
 {
     if (id_equal(g->real_pk, peer_pk)) {
@@ -2147,10 +2156,6 @@ static void handle_friend_invite_packet(Messenger *m, uint32_t friendnumber, con
 
             const uint8_t *conference_id = data + 2 + sizeof(uint16_t) * 2;
 
-            /* we absolutely do not care about groupnumber in packet
-             * but, in case groupnum_in != groupnumber,
-             * we should send INVITE_ID packet back to peer with correct groupnumber */
-
             const int32_t groupnumber = get_group_num(g_c, data + 1 + sizeof(uint16_t) * 2);
             Group_c *g = get_group_c(g_c, groupnumber);
 
@@ -2169,9 +2174,8 @@ static void handle_friend_invite_packet(Messenger *m, uint32_t friendnumber, con
             }
 
             if (groupnumber != groupnum_in) {
-                /* send INVITE_ID to restore valid groupnum
-                 * old toxcore will ignore this packet,
-                 */
+                /* send INVITE_MYGROUP_ID to restore valid groupnum
+                 * old toxcore will ignore this packet */
 
                 uint8_t invite[INVITE_PACKET_SIZE];
                 invite[0] = INVITE_MYGROUP_ID;
@@ -2912,11 +2916,13 @@ static void handle_message_packet_group(Group_Chats *g_c, int groupnumber, const
 
     if (index == -1) {
         if (really_connected(&g->peers[peer_index_from])) {
+            /* We don't know the peer this packet came from so we query the list of peers from that peer.
+               (They would not have relayed it if they didn't know the peer.) */
             send_peer_query(g_c, g->peers[peer_index_from].friendcon_id, g->peers[peer_index_from].group_number);
         }
 
         if (msg_id != GROUP_MESSAGE_NEW_PEER_ID) {
-            return; /* this packet is very important to autojoin and compatibility, so we proceed id even no source peer known */
+            return; /* new peer packet is very important to autojoin and compatibility, so we proceed even if no source peer known */
         }
     }
 
@@ -2997,7 +3003,7 @@ static void handle_message_packet_group(Group_Chats *g_c, int groupnumber, const
                 g->join_mode = false;
             }
 
-            /*int64_t peer_index =*/ addpeer(g, groupnumber, real_pk, temp_pk, new_peer_gid);
+            addpeer(g, groupnumber, real_pk, temp_pk, new_peer_gid);
 
             int self_peer_gid = get_self_peer_gid(g);
 
@@ -3379,7 +3385,7 @@ int group_peer_set_object(const Group_Chats *g_c, int groupnumber, int peernumbe
     return 0;
 }
 
-/* Return the object tide to the group chat previously set by group_set_object.
+/* Return the object tied to the group chat previously set by group_set_object.
  *
  * return NULL on failure.
  * return object on success.
@@ -3395,7 +3401,7 @@ void *group_get_object(const Group_Chats *g_c, int groupnumber)
     return g->object;
 }
 
-/* Return the object tide to the group chat peer previously set by group_peer_set_object.
+/* Return the object tied to the group chat peer previously set by group_peer_set_object.
  *
  * return NULL on failure.
  * return object on success.
@@ -3420,6 +3426,12 @@ static int64_t deltatime(uint64_t t1, uint64_t t2)
     return (int64_t)(t1 - t2);
 }
 
+/* Could gn be the group number of the group ig according to the peer with
+ * public key for_pk?
+ *
+ * return false if we know the peer uses this group number for another group.
+ * return true otherwise.
+ */
 static bool possible_groupnum(Group_Chats *g_c, Group_c *ig, uint16_t gn, const uint8_t *for_pk)
 {
     for (uint16_t i = 0; i < g_c->num_chats; ++i) {
@@ -3917,7 +3929,7 @@ static uint32_t saved_conferences_size(const Messenger *m)
 
         /* +1 byte for options, +1 byte for title len, +2 bytes for count of joinpeers */
         sz += GROUP_IDENTIFIER_LENGTH + 1 + 1 + sizeof(uint16_t);
-        sz += g->title_len; /* +1 byte for title len */
+        sz += g->title_len;
         sz += g->numjoinpeers * CRYPTO_PUBLIC_KEY_SIZE;
     }
 

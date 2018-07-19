@@ -31,6 +31,7 @@ enum {
     GROUPCHAT_TYPE_AV
 };
 
+/* number of lossy packets to remember receiving; should divide (1<<16) */
 #define MAX_LOSSY_COUNT 256
 
 /* number of group messages */
@@ -53,26 +54,27 @@ typedef struct {
 
     uint8_t     *nick;
 
-    uint32_t    last_message_number[NUM_GROUP_PACKET_IDS];
-    int         friendcon_id;
+    uint32_t    last_message_number[NUM_GROUP_PACKET_IDS]; /* greatest message number heard from the peer, sorted by message id */
+    int         friendcon_id; /* id of friend connection being used by the group for this peer, or -1, or ALMOST_DELETED_PEER */
 
     signed      gid : 24; /* unique per-conference peer id */
     uint8_t     nick_len;
-    uint16_t    group_number;
-    uint8_t     keep_connection; /* keep connection even not in ring (count down every incoming ping packet) */
-    unsigned    nick_changed : 1;
-    unsigned    title_changed : 1;
-    unsigned    auto_join : 1;
-    unsigned    need_send_peers : 1;
-    unsigned    connected : 1;
+    uint16_t    group_number; /* number the peer uses to reference the group (we use index in Group_Chats.chats), or INVALID_GROUP_NUMBER */
+    uint8_t     keep_connection; /* If positive, keep connection even if peer is not one of the closest; counts down every incoming ping packet */
+    unsigned    nick_changed : 1; /* peer's nick has changed since it was last used in peer_name_callback or group_peername() */
+    unsigned    title_changed : 1; /* peer changed the group title */
+    unsigned    auto_join : 1; /* peer was added unilaterally in order to restore the group, and we have not yet learnt the peer's gid */
+    unsigned    need_send_peers : 1; /* peer may not have up-to-date information on our peers */
+    unsigned    connected : 1; /* friend connection to peer is connected */
 } Group_Peer;
 
+/* peer to be used when trying to restore a group */
 typedef struct {
     uint64_t    next_try_time;
     uint8_t     real_pk[CRYPTO_PUBLIC_KEY_SIZE];
-    int8_t      fails;
-    unsigned    online : 1;
-    unsigned    unsubscribed : 1;
+    int8_t      fails; /* next group_number to try in an Invite Response to peer, or MAX_FAILED_JOIN_ATTEMPTS */
+    unsigned    online : 1; /* friend connection to peer observed since restore process started */
+    unsigned    unsubscribed : 1; /* peer left or temporarily unsubscribed since restore process started */
 } Group_Join_Peer;
 
 #define DESIRED_CLOSE_CONNECTIONS 4
@@ -81,19 +83,19 @@ typedef struct {
 typedef struct {
     Group_Peer *peers;
     Group_Join_Peer *joinpeers;
-    uint16_t *peers_list;
+    uint16_t *peers_list; /* list of indices to peers */
     void *object;
 
-    uint32_t numpeers;
-    uint32_t numpeers_in_list;
+    uint32_t numpeers; /* entries in peers */
+    uint32_t numpeers_in_list; /* entries in peers_list */
     uint32_t message_number;
-    uint16_t numjoinpeers;
+    uint16_t numjoinpeers; /* entries in joinpeers */
 
     uint64_t last_sent_ping;
     uint64_t next_join_check_time;
     uint64_t last_close_check_time;
 
-    uint8_t real_pk[CRYPTO_PUBLIC_KEY_SIZE];
+    uint8_t real_pk[CRYPTO_PUBLIC_KEY_SIZE]; /* our tox public key */
     uint8_t title[MAX_NAME_LENGTH];
     uint16_t closest_peers[DESIRED_CLOSE_CONNECTIONS];
 
@@ -101,14 +103,13 @@ typedef struct {
     void (*peer_on_leave)(void *, uint32_t, void *);
     void (*group_on_delete)(void *, uint32_t);
 
-    uint8_t identifier[GROUP_IDENTIFIER_LENGTH];
+    uint8_t identifier[GROUP_IDENTIFIER_LENGTH]; /* group type followed by group UID */
 
-unsigned closest_peers_entry :
-    DESIRED_CLOSE_CONNECTIONS;
-    unsigned live : 1;
+    unsigned closest_peers_entry : DESIRED_CLOSE_CONNECTIONS; /* ith bit indicates whether closest_peers[i] is set */
+    unsigned live : 1; /* struct refers to an actual group; else, it is dead memory waiting to be reallocated */
     unsigned join_mode : 1;
     unsigned fake_join : 1;
-    unsigned auto_join : 1;
+    unsigned auto_join : 1; /* in the process of trying to join the group by sending an unsolicited Invite Response */
 
     unsigned title_len : 8;
     unsigned lossy_message_number : 16;
@@ -120,7 +121,7 @@ unsigned closest_peers_entry :
     unsigned title_changed : 1;
     unsigned invite_called : 1;
     unsigned keep_leave : 1;
-    unsigned disable_auto_join : 1;
+    unsigned disable_auto_join : 1; /* don't try to restore group */
     unsigned nick_changed : 1;
 } Group_c;
 
