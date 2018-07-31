@@ -1728,17 +1728,18 @@ static int handle_send_peers(Group_Chats *g_c, uint32_t groupnumber, const uint8
         memcpy(&peer_num, d, sizeof(peer_num));
         peer_num = net_ntohs(peer_num);
         d += sizeof(uint16_t);
-        int peer_index = addpeer(g_c, groupnumber, d, d + CRYPTO_PUBLIC_KEY_SIZE, peer_num, userdata, true);
-
-        if (peer_index == -1) {
-            return -1;
-        }
 
         if (g->status == GROUPCHAT_STATUS_VALID
                 && public_key_cmp(d, nc_get_self_public_key(g_c->m->net_crypto)) == 0) {
             g->peer_number = peer_num;
             g->status = GROUPCHAT_STATUS_CONNECTED;
             group_name_send(g_c, groupnumber, g_c->m->name, g_c->m->name_length);
+        }
+
+        int peer_index = addpeer(g_c, groupnumber, d, d + CRYPTO_PUBLIC_KEY_SIZE, peer_num, userdata, true);
+
+        if (peer_index == -1) {
+            return -1;
         }
 
         d += CRYPTO_PUBLIC_KEY_SIZE * 2;
