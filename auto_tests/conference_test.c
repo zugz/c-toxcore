@@ -18,7 +18,7 @@
 #define NUM_GROUP_TOX 32
 #define GROUP_MESSAGE "Install Gentoo"
 
-#define NAME_FORMAT_STR "Tox #%4d"
+#define NAME_FORMAT_STR "Tox #%4u"
 #define NAMELEN 9
 #define NAME_FORMAT "%9s"
 
