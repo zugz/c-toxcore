@@ -105,7 +105,7 @@ static void run_conference_tests(Tox **toxes, uint32_t *tox_index)
     for (uint16_t i = 0; i < NUM_GROUP_TOX; ++i) {
         for (uint16_t j = 0; j < NUM_GROUP_TOX; ++j) {
             const size_t len = tox_conference_peer_get_name_size(toxes[i], 0, j, nullptr);
-            ck_assert_msg(len == NAMELEN, "name of #%u according to #%u has incorrect length %u", tox_index[j], tox_index[i], len);
+            ck_assert_msg(len == NAMELEN, "name of #%u according to #%u has incorrect length %u", tox_index[j], tox_index[i], (unsigned int) len);
             uint8_t name[NAMELEN];
             tox_conference_peer_get_name(toxes[i], 0, j, name, nullptr);
             char expected_name[NAMELEN + 1];
