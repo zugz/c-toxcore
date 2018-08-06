@@ -13,6 +13,7 @@ typedef struct Mono_Time Mono_Time;
 Mono_Time *mono_time_new(void);
 void mono_time_free(Mono_Time *monotime);
 
+void timeshift(uint64_t shift);
 void mono_time_update(Mono_Time *monotime);
 uint64_t mono_time_get(const Mono_Time *monotime);
 bool mono_time_is_timeout(const Mono_Time *monotime, uint64_t timestamp, uint64_t timeout);
@@ -24,6 +25,7 @@ int is_timeout(uint64_t timestamp, uint64_t timeout);
 
 /* return current monotonic time in milliseconds (ms). */
 uint64_t current_time_monotonic(void);
+uint64_t current_time_monotonic_shifted(void);
 
 #ifdef __cplusplus
 }

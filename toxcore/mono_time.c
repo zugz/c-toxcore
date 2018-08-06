@@ -28,6 +28,7 @@
 struct Mono_Time {
     uint64_t time;
     uint64_t base_time;
+    uint64_t shift_time;
 };
 
 Mono_Time *mono_time_new(void)
@@ -55,7 +56,7 @@ void mono_time_update(Mono_Time *monotime)
         monotime->base_time = ((uint64_t)time(nullptr) - (current_time_monotonic() / 1000ULL));
     }
 
-    monotime->time = (current_time_monotonic() / 1000ULL) + monotime->base_time;
+    monotime->time = ((current_time_monotonic() + monotime->shift_time) / 1000ULL) + monotime->base_time;
 }
 
 uint64_t mono_time_get(const Mono_Time *monotime)
@@ -73,6 +74,11 @@ bool mono_time_is_timeout(const Mono_Time *monotime, uint64_t timestamp, uint64_
 // No global mutable state in Tokstyle.
 static Mono_Time global_time;
 //!TOKSTYLE+
+
+void timeshift(uint64_t shift)
+{
+    global_time.shift_time += shift;
+}
 
 /* XXX: note that this is not thread-safe; if multiple threads call unix_time_update() concurrently, the return value of
  * unix_time() may fail to increase monotonically with increasing time */
@@ -137,4 +143,8 @@ uint64_t current_time_monotonic(void)
     time = 1000ULL * monotime.tv_sec + (monotime.tv_nsec / 1000000ULL);
 #endif
     return time;
+}
+uint64_t current_time_monotonic_shifted(void)
+{
+    return current_time_monotonic() + global_time.shift_time;
 }
