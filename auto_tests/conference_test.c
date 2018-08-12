@@ -13,13 +13,16 @@
 #include "../toxcore/crypto_core.h"
 #include "../toxcore/tox.h"
 #include "../toxcore/util.h"
+#include "../toxcore/mono_time.h"
 #include "check_compat.h"
 
 #define NUM_GROUP_TOX 32
-#define NUM_DISCONNECT 8
+#define NUM_DISCONNECT 16
 #define GROUP_MESSAGE "Install Gentoo"
 
 #define NAME_FORMAT_STR "Old #%4u"
+#define NEW_NAME_PREFIX "New"
+#define NEW_NAME_PREFIX_LENGTH 3
 #define NEW_NAME_FORMAT_STR "New #%4u"
 #define NAMELEN 9
 #define NAME_FORMAT "%9s"
@@ -110,15 +113,25 @@ static void handle_conference_message(
 
 static void run_conference_tests(Tox **toxes, State *state)
 {
+    printf("letting things settle\n");
+    for (uint16_t j = 0; j < 70 * 20; ++j) {
+        for (uint16_t i = 0; i < NUM_GROUP_TOX; ++i) {
+            tox_iterate(toxes[i], &state[i].id);
+        }
+
+        timeshift(50);
+    }
+
     printf("letting random toxes timeout\n");
     uint16_t disconnect_toxes[NUM_DISCONNECT];
 
     for (uint16_t i = 0; i < NUM_DISCONNECT; ++i) {
+        //disconnect_toxes[i] = random_u32() % NUM_GROUP_TOX;
         disconnect_toxes[i] = random_u32() % NUM_GROUP_TOX;
         printf("disconnecting #%u\n", state[disconnect_toxes[i]].id);
     }
 
-    for (uint16_t j = 0; j < 70 * 5; ++j) {
+    for (uint16_t j = 0; j < 70 * 20; ++j) {
         for (uint16_t i = 0; i < NUM_GROUP_TOX; ++i) {
             bool disconnected = false;
 
@@ -134,7 +147,7 @@ static void run_conference_tests(Tox **toxes, State *state)
             }
         }
 
-        c_sleep(200);
+        timeshift(50);
     }
 
     printf("changing names\n");
@@ -145,14 +158,35 @@ static void run_conference_tests(Tox **toxes, State *state)
         tox_self_set_name(toxes[i], (const uint8_t *)name, NAMELEN, nullptr);
     }
 
-    printf("reconnecting toxes\n");
+    printf("waiting for all toxes to be in the group\n");
+    uint16_t fully_connected_count = 0;
 
-    for (uint16_t j = 0; j < 120 * 5; ++j) {
+    while (fully_connected_count != NUM_GROUP_TOX) {
+        fully_connected_count = 0;
+        printf("%llu: current peer counts: [", unix_time());
+
         for (uint16_t i = 0; i < NUM_GROUP_TOX; ++i) {
             tox_iterate(toxes[i], &state[i]);
+            TOX_ERR_CONFERENCE_PEER_QUERY err;
+            uint32_t peer_count = tox_conference_peer_count(toxes[i], 0, &err);
+
+            if (err != TOX_ERR_CONFERENCE_PEER_QUERY_OK) {
+                peer_count = 0;
+            }
+
+            fully_connected_count += peer_count == NUM_GROUP_TOX;
+
+            if (i != 0) {
+                printf(", ");
+            }
+
+            printf("%s%u%s", tox_friend_get_connection_status(toxes[i], 0 - (i==0), nullptr) ? "<" : ".", peer_count, tox_friend_get_connection_status(toxes[i], 1 - (i==0), nullptr) ? ">" : ".");
         }
 
-        c_sleep(200);
+        printf("]\n");
+        fflush(stdout);
+
+        timeshift(200);
     }
 
     printf("running conference tests\n");
@@ -162,12 +196,13 @@ static void run_conference_tests(Tox **toxes, State *state)
     }
 
     TOX_ERR_CONFERENCE_SEND_MESSAGE err;
+    const uint32_t sender = random_u32() % NUM_GROUP_TOX;
     ck_assert_msg(
         tox_conference_send_message(
-            toxes[random_u32() % NUM_GROUP_TOX], 0, TOX_MESSAGE_TYPE_NORMAL, (const uint8_t *)GROUP_MESSAGE,
-            sizeof(GROUP_MESSAGE) - 1, &err) != 0, "failed to send group message");
+            toxes[sender], 0, TOX_MESSAGE_TYPE_NORMAL, (const uint8_t *)GROUP_MESSAGE,
+            sizeof(GROUP_MESSAGE) - 1, &err) != 0, "#%u failed to send group message", state[sender].id);
     ck_assert_msg(
-        err == TOX_ERR_CONFERENCE_SEND_MESSAGE_OK, "failed to send group message");
+        err == TOX_ERR_CONFERENCE_SEND_MESSAGE_OK, "#%u failed to send group message", state[sender].id);
     num_recv = 0;
 
     for (uint8_t j = 0; j < 20; ++j) {
@@ -175,11 +210,11 @@ static void run_conference_tests(Tox **toxes, State *state)
             tox_iterate(toxes[i], &state[i]);
         }
 
-        c_sleep(25);
+        timeshift(25);
     }
 
-    c_sleep(25);
-    ck_assert_msg(num_recv == NUM_GROUP_TOX, "failed to recv group messages");
+    timeshift(25);
+    ck_assert_msg(num_recv == NUM_GROUP_TOX, "only %u out of %u received group message sent by #%u", num_recv, NUM_GROUP_TOX, state[sender].id);
 
     for (uint16_t i = 0; i < NUM_GROUP_TOX; ++i) {
         for (uint16_t j = 0; j < NUM_GROUP_TOX; ++j) {
@@ -189,8 +224,8 @@ static void run_conference_tests(Tox **toxes, State *state)
             uint8_t name[NAMELEN];
             tox_conference_peer_get_name(toxes[i], 0, j, name, nullptr);
             /* Note the toxes will have been reordered */
-            ck_assert_msg(memcmp(name, "New", 3) == 0,
-                          "name of #%u according to #%u not updated", state[j].id, state[i].id);
+            ck_assert_msg(memcmp(name, NEW_NAME_PREFIX, NEW_NAME_PREFIX_LENGTH) == 0,
+                          "name of peer %u according to #%u not updated", j, state[i].id);
         }
     }
 
@@ -200,9 +235,26 @@ static void run_conference_tests(Tox **toxes, State *state)
         for (uint8_t j = 0; j < 10; ++j) {
             for (uint16_t i = 0; i < NUM_GROUP_TOX; ++i) {
                 tox_iterate(toxes[i], &state[i]);
+                TOX_ERR_CONFERENCE_PEER_QUERY err;
+                uint32_t peer_count = tox_conference_peer_count(toxes[i], 0, &err);
+
+                if (err != TOX_ERR_CONFERENCE_PEER_QUERY_OK) {
+                    peer_count = 0;
+                }
+
+                fully_connected_count += peer_count == NUM_GROUP_TOX;
+
+                if (i != 0) {
+                    printf(", ");
+                }
+
+                printf("%u", peer_count);
             }
 
-            c_sleep(50);
+            printf("]\n");
+            fflush(stdout);
+
+            timeshift(50);
         }
 
         for (uint16_t i = 0; i < k - 1; ++i) {
@@ -280,13 +332,14 @@ static void test_many_group(void)
             online_count += tox_friend_get_connection_status(toxes[i], 0, nullptr) != TOX_CONNECTION_NONE;
         }
 
-        printf("currently %u toxes are online\n", online_count);
+        printf("%llu: currently %u toxes are online\n", unix_time(), online_count);
         fflush(stdout);
 
-        c_sleep(1000);
+        timeshift(50);
     }
 
     printf("friends connected, took %d seconds\n", (int)(time(nullptr) - cur_time));
+
 
     ck_assert_msg(tox_conference_new(toxes[0], nullptr) != UINT32_MAX, "failed to create group");
     printf("tox #%u: inviting its first friend\n", state[0].id);
@@ -307,7 +360,7 @@ static void test_many_group(void)
             invited_count += state[i].invited_next;
         }
 
-        c_sleep(50);
+        timeshift(50);
     }
 
     cur_time = time(nullptr);
@@ -339,7 +392,7 @@ static void test_many_group(void)
         printf("]\n");
         fflush(stdout);
 
-        c_sleep(200);
+        timeshift(200);
     }
 
     for (uint16_t i = 0; i < NUM_GROUP_TOX; ++i) {
@@ -372,6 +425,7 @@ static void test_many_group(void)
 int main(void)
 {
     setvbuf(stdout, nullptr, _IONBF, 0);
+    unix_time_update();
 
     test_many_group();
     return 0;
