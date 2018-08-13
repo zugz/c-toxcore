@@ -17,6 +17,7 @@
 #include "check_compat.h"
 
 #define NUM_TOXES 2
+#define RECONNECT_TIME 121
 
 typedef struct State {
     uint32_t id;
@@ -115,7 +116,7 @@ static void test_reconnect(void)
     printf("friends connected, took %d seconds\n", (int)(time(nullptr) - cur_time));
 
     printf("letting connection settle\n");
-    for (uint16_t j = 0; j < 60 * 20; ++j) {
+    for (uint16_t j = 0; j < 2 * 20; ++j) {
         for (uint16_t i = 0; i < NUM_TOXES; ++i) {
                 tox_iterate(toxes[i], &state[i].id);
         }
@@ -126,7 +127,7 @@ static void test_reconnect(void)
     uint16_t disconnect = random_u16() % NUM_TOXES;
     printf("disconnecting #%u\n", state[disconnect].id);
 
-    for (uint16_t j = 0; j < 70 * 20; ++j) {
+    for (uint16_t j = 0; j < 31 * 20; ++j) {
         for (uint16_t i = 0; i < NUM_TOXES; ++i) {
             if (i != disconnect) {
                 tox_iterate(toxes[i], &state[i].id);
@@ -136,9 +137,9 @@ static void test_reconnect(void)
         timeshift(50);
     }
 
-    printf("reconnecting\n");
+    printf("allowing %u seconds for reconnection\n", RECONNECT_TIME);
 
-    for (uint16_t j = 0; j < 5 * 20; ++j) {
+    for (uint16_t j = 0; j < RECONNECT_TIME * 20; ++j) {
         for (uint16_t i = 0; i < NUM_TOXES; ++i) {
                 tox_iterate(toxes[i], &state[i].id);
         }
