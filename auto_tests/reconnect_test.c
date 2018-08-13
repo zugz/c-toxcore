@@ -11,6 +11,7 @@
 
 #include "../testing/misc_tools.h"
 #include "../toxcore/crypto_core.h"
+#include "../toxcore/mono_time.h"
 #include "../toxcore/tox.h"
 #include "../toxcore/util.h"
 #include "check_compat.h"
@@ -108,7 +109,7 @@ static void test_reconnect(void)
         printf("currently %u toxes are online\n", online_count);
         fflush(stdout);
 
-        c_sleep(200);
+        timeshift(200);
     }
 
     printf("friends connected, took %d seconds\n", (int)(time(nullptr) - cur_time));
@@ -119,7 +120,7 @@ static void test_reconnect(void)
                 tox_iterate(toxes[i], &state[i].id);
         }
 
-        c_sleep(50);
+        timeshift(50);
     }
 
     uint16_t disconnect = random_u16() % NUM_TOXES;
@@ -132,7 +133,7 @@ static void test_reconnect(void)
             }
         }
 
-        c_sleep(50);
+        timeshift(50);
     }
 
     printf("reconnecting\n");
@@ -142,7 +143,7 @@ static void test_reconnect(void)
                 tox_iterate(toxes[i], &state[i].id);
         }
 
-        c_sleep(50);
+        timeshift(50);
     }
 
     if (disconnect < NUM_TOXES-1) {
