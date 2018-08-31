@@ -20,25 +20,17 @@
 #define GROUP_MESSAGE "Install Gentoo"
 
 #define NAMELEN 9
-#define NAME_FORMAT "%9s"
 #define NAME_FORMAT_STR "Tox #%4u"
 #define NEW_NAME_FORMAT_STR "New #%4u"
-#define NEW_NAME_PREFIX "New"
-#define NEW_NAME_PREFIX_LEN 3
 
 typedef struct State {
     uint32_t index;
+    uint64_t clock;
+
     bool invited_next;
 } State;
 
-static bool iterate_all(uint32_t tox_count, Tox **toxes, State *state)
-{
-    for (uint32_t i = 0; i < tox_count; i++) {
-        tox_iterate(toxes[i], &state[i]);
-    }
-
-    return true;
-}
+#include "run_auto_test.h"
 
 static void handle_self_connection_status(
     Tox *tox, TOX_CONNECTION connection_status, void *user_data)
@@ -168,15 +160,16 @@ static void run_conference_tests(Tox **toxes, State *state)
         printf("Disconnecting #%u\n", state[disconnect].index);
     }
 
-    while (!toxes_are_disconnected_from_group(NUM_GROUP_TOX, toxes, NUM_DISCONNECT, disconnected)) {
+    do {
         for (uint16_t i = 0; i < NUM_GROUP_TOX; ++i) {
             if (!disconnected[i]) {
                 tox_iterate(toxes[i], &state[i]);
+                state[i].clock += 1000;
             }
         }
 
-        c_sleep(ITERATION_INTERVAL);
-    }
+        c_sleep(20);
+    } while (!toxes_are_disconnected_from_group(NUM_GROUP_TOX, toxes, NUM_DISCONNECT, disconnected));
 
     if (check_name_propagation) {
         printf("changing names\n");
@@ -190,11 +183,9 @@ static void run_conference_tests(Tox **toxes, State *state)
 
     printf("reconnecting toxes\n");
 
-    while (!all_connected_to_group(NUM_GROUP_TOX, toxes)) {
-        iterate_all(NUM_GROUP_TOX, toxes, state);
-
-        c_sleep(ITERATION_INTERVAL);
-    }
+    do {
+        iterate_all_wait(NUM_GROUP_TOX, toxes, state, ITERATION_INTERVAL);
+    } while (!all_connected_to_group(NUM_GROUP_TOX, toxes));
 
     printf("running conference tests\n");
 
@@ -212,12 +203,9 @@ static void run_conference_tests(Tox **toxes, State *state)
     num_recv = 0;
 
     for (uint8_t j = 0; j < NUM_GROUP_TOX * 2; ++j) {
-        iterate_all(NUM_GROUP_TOX, toxes, state);
-
-        c_sleep(25);
+        iterate_all_wait(NUM_GROUP_TOX, toxes, state, ITERATION_INTERVAL);
     }
 
-    c_sleep(25);
     ck_assert_msg(num_recv == NUM_GROUP_TOX, "failed to recv group messages");
 
     for (uint16_t i = 0; i < NUM_GROUP_TOX; ++i) {
@@ -225,9 +213,9 @@ static void run_conference_tests(Tox **toxes, State *state)
             const size_t len = tox_conference_peer_get_name_size(toxes[i], 0, j, nullptr);
             ck_assert_msg(len == NAMELEN, "name of #%u according to #%u has incorrect length %u", state[j].index, state[i].index,
                           (unsigned int)len);
-            uint8_t name[NAMELEN];
 
             if (check_name_propagation) {
+                uint8_t name[NAMELEN];
                 tox_conference_peer_get_name(toxes[i], 0, j, name, nullptr);
                 /* Note the toxes will have been reordered */
                 ck_assert_msg(memcmp(name, "New", 3) == 0,
@@ -240,9 +228,7 @@ static void run_conference_tests(Tox **toxes, State *state)
         tox_conference_delete(toxes[k - 1], 0, nullptr);
 
         for (uint8_t j = 0; j < 10 || j < NUM_GROUP_TOX; ++j) {
-            iterate_all(NUM_GROUP_TOX, toxes, state);
-
-            c_sleep(50);
+            iterate_all_wait(NUM_GROUP_TOX, toxes, state, ITERATION_INTERVAL);
         }
 
         for (uint16_t i = 0; i < k - 1; ++i) {
@@ -254,26 +240,11 @@ static void run_conference_tests(Tox **toxes, State *state)
     }
 }
 
-static void test_many_group(void)
+static void test_many_group(Tox **toxes, State *state)
 {
     const time_t test_start_time = time(nullptr);
 
-    Tox *toxes[NUM_GROUP_TOX];
-    State state[NUM_GROUP_TOX];
-    memset(state, 0, NUM_GROUP_TOX * sizeof(State));
-    time_t cur_time = time(nullptr);
-    struct Tox_Options *opts = tox_options_new(nullptr);
-    tox_options_set_start_port(opts, 33445);
-    tox_options_set_end_port(opts, 34445);
-
-    printf("creating %d toxes\n", NUM_GROUP_TOX);
-
     for (uint16_t i = 0; i < NUM_GROUP_TOX; ++i) {
-        TOX_ERR_NEW err;
-        state[i].index = i + 1;
-        toxes[i] = tox_new_log(opts, &err, &state[i]);
-
-        ck_assert_msg(toxes[i] != nullptr, "failed to create tox instance %u: error %d", i, err);
         tox_callback_self_connection_status(toxes[i], &handle_self_connection_status);
         tox_callback_friend_connection_status(toxes[i], &handle_friend_connection_status);
         tox_callback_conference_invite(toxes[i], &handle_conference_invite);
@@ -282,51 +253,7 @@ static void test_many_group(void)
         char name[NAMELEN + 1];
         snprintf(name, NAMELEN + 1, NAME_FORMAT_STR, state[i].index);
         tox_self_set_name(toxes[i], (const uint8_t *)name, NAMELEN, nullptr);
-
-        if (i != 0) {
-            uint8_t dht_key[TOX_PUBLIC_KEY_SIZE];
-            tox_self_get_dht_id(toxes[0], dht_key);
-            const uint16_t dht_port = tox_self_get_udp_port(toxes[0], nullptr);
-
-            tox_bootstrap(toxes[i], "localhost", dht_port, dht_key, nullptr);
-        }
     }
-
-    tox_options_free(opts);
-
-    printf("creating a chain of friends\n");
-
-    for (unsigned i = 1; i < NUM_GROUP_TOX; ++i) {
-        TOX_ERR_FRIEND_ADD err;
-        uint8_t key[TOX_PUBLIC_KEY_SIZE];
-
-        tox_self_get_public_key(toxes[i - 1], key);
-        tox_friend_add_norequest(toxes[i], key, &err);
-        ck_assert_msg(err == TOX_ERR_FRIEND_ADD_OK, "failed to add friend: error %d", err);
-
-        tox_self_get_public_key(toxes[i], key);
-        tox_friend_add_norequest(toxes[i - 1], key, &err);
-        ck_assert_msg(err == TOX_ERR_FRIEND_ADD_OK, "failed to add friend: error %d", err);
-    }
-
-    printf("waiting for everyone to come online\n");
-    unsigned online_count = 0;
-
-    do {
-        online_count = 0;
-
-        for (uint16_t i = 0; i < NUM_GROUP_TOX; ++i) {
-            tox_iterate(toxes[i], &state[i]);
-            online_count += tox_friend_get_connection_status(toxes[i], 0, nullptr) != TOX_CONNECTION_NONE;
-        }
-
-        printf("currently %u toxes are online\n", online_count);
-        fflush(stdout);
-
-        c_sleep(1000);
-    } while (online_count != NUM_GROUP_TOX);
-
-    printf("friends connected, took %d seconds\n", (int)(time(nullptr) - cur_time));
 
     ck_assert_msg(tox_conference_new(toxes[0], nullptr) != UINT32_MAX, "failed to create group");
     printf("tox #%u: inviting its first friend\n", state[0].index);
@@ -340,17 +267,16 @@ static void test_many_group(void)
     uint16_t invited_count = 0;
 
     do {
+        iterate_all_wait(NUM_GROUP_TOX, toxes, state, ITERATION_INTERVAL);
+
         invited_count = 0;
 
         for (uint16_t i = 0; i < NUM_GROUP_TOX; ++i) {
-            tox_iterate(toxes[i], &state[i]);
             invited_count += state[i].invited_next;
         }
-
-        c_sleep(50);
     } while (invited_count != NUM_GROUP_TOX - 1);
 
-    cur_time = time(nullptr);
+    uint64_t pregroup_clock = state[0].clock;
     printf("waiting for all toxes to be in the group\n");
     uint16_t fully_connected_count = 0;
 
@@ -358,8 +284,9 @@ static void test_many_group(void)
         fully_connected_count = 0;
         printf("current peer counts: [");
 
+        iterate_all_wait(NUM_GROUP_TOX, toxes, state, ITERATION_INTERVAL);
+
         for (uint16_t i = 0; i < NUM_GROUP_TOX; ++i) {
-            tox_iterate(toxes[i], &state[i]);
             TOX_ERR_CONFERENCE_PEER_QUERY err;
             uint32_t peer_count = tox_conference_peer_count(toxes[i], 0, &err);
 
@@ -378,8 +305,6 @@ static void test_many_group(void)
 
         printf("]\n");
         fflush(stdout);
-
-        c_sleep(200);
     } while (fully_connected_count != NUM_GROUP_TOX);
 
     for (uint16_t i = 0; i < NUM_GROUP_TOX; ++i) {
@@ -396,15 +321,9 @@ static void test_many_group(void)
         ck_assert_msg(memcmp("Gentoo", title, ret) == 0, "Wrong title");
     }
 
-    printf("group connected, took %d seconds\n", (int)(time(nullptr) - cur_time));
+    printf("group connected, took %d seconds\n", (int)((state[0].clock - pregroup_clock) / 1000));
 
     run_conference_tests(toxes, state);
-
-    printf("tearing down toxes\n");
-
-    for (uint16_t i = 0; i < NUM_GROUP_TOX; ++i) {
-        tox_kill(toxes[i]);
-    }
 
     printf("test_many_group succeeded, took %d seconds\n", (int)(time(nullptr) - test_start_time));
 }
@@ -413,8 +332,6 @@ int main(void)
 {
     setvbuf(stdout, nullptr, _IONBF, 0);
 
-    /* TODO(zugz): adapt run_auto_test() to allow creating chains of toxes, so we
-     * can use it here. */
-    test_many_group();
+    run_auto_test(NUM_GROUP_TOX, test_many_group, true);
     return 0;
 }
