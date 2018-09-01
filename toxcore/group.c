@@ -2436,7 +2436,7 @@ static void handle_message_packet_group(Group_Chats *g_c, uint32_t groupnumber, 
         return;
     }
 
-    if (g->num_introducer_connections > 0 && count_close_connected(g) >= DESIRED_CLOSE_CONNECTIONS) {
+    if (g->num_introducer_connections > 0 && count_close_connected(g) > DESIRED_CLOSE_CONNECTIONS) {
         for (uint32_t i = 0; i < MAX_GROUP_CONNECTIONS; ++i) {
             if (g->close[i].type == GROUPCHAT_CLOSE_NONE
                     || !(g->close[i].reasons & GROUPCHAT_CLOSE_REASON_INTRODUCER)
