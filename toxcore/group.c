@@ -639,7 +639,7 @@ static int remove_close_conn(Group_Chats *g_c, uint32_t groupnumber, int friendc
 
 static void remove_from_closest(Group_c *g, int peer_index)
 {
-    for (uint32_t i = 0; i < DESIRED_CLOSE_CONNECTIONS; ++i) { /* If peer is in closest_peers list, remove it. */
+    for (uint32_t i = 0; i < DESIRED_CLOSE_CONNECTIONS; ++i) {
         if (g->closest_peers[i].entry && id_equal(g->closest_peers[i].real_pk, g->group[peer_index].real_pk)) {
             g->closest_peers[i].entry = 0;
             g->changed = GROUPCHAT_CLOSEST_REMOVED;
@@ -654,7 +654,7 @@ static void remove_from_closest(Group_c *g, int peer_index)
  * return 0 if success
  * return -1 if error.
  */
-static int delpeer(Group_Chats *g_c, uint32_t groupnumber, int peer_index, bool freeze, void *userdata)
+static int delpeer(Group_Chats *g_c, uint32_t groupnumber, int peer_index, void *userdata, bool keep_connection)
 {
     Group_c *g = get_group_c(g_c, groupnumber);
 
@@ -662,23 +662,11 @@ static int delpeer(Group_Chats *g_c, uint32_t groupnumber, int peer_index, bool 
         return -1;
     }
 
-    if (freeze) {
-        Group_Peer *temp = (Group_Peer *)realloc(g->frozen, sizeof(Group_Peer) * (g->numfrozen + 1));
-
-        if (temp == nullptr) {
-            return -1;
-        }
-
-        g->frozen = temp;
-        g->frozen[g->numfrozen] = g->group[peer_index];
-        ++g->numfrozen;
-    }
-
     remove_from_closest(g, peer_index);
 
     const int friendcon_id = getfriend_conn_id_pk(g_c->fr_c, g->group[peer_index].real_pk);
 
-    if (friendcon_id != -1 && !freeze) {
+    if (friendcon_id != -1 && !keep_connection) {
         remove_close_conn(g_c, groupnumber, friendcon_id);
     }
 
@@ -713,6 +701,28 @@ static int delpeer(Group_Chats *g_c, uint32_t groupnumber, int peer_index, bool 
 
     return 0;
 }
+
+static int freeze_peer(Group_Chats *g_c, uint32_t groupnumber, int peer_index, void *userdata)
+{
+    Group_c *g = get_group_c(g_c, groupnumber);
+
+    if (!g) {
+        return -1;
+    }
+
+    Group_Peer *temp = (Group_Peer *)realloc(g->frozen, sizeof(Group_Peer) * (g->numfrozen + 1));
+
+    if (temp == nullptr) {
+        return -1;
+    }
+
+    g->frozen = temp;
+    g->frozen[g->numfrozen] = g->group[peer_index];
+    ++g->numfrozen;
+
+    return delpeer(g_c, groupnumber, peer_index, userdata, true);
+}
+
 
 /* Set the nick for a peer.
  *
@@ -806,7 +816,7 @@ static void check_disconnected(Group_Chats *g_c, uint32_t groupnumber, void *use
             continue;
         }
 
-        delpeer(g_c, groupnumber, i, true, userdata);
+        freeze_peer(g_c, groupnumber, i, userdata);
     }
 }
 
@@ -2484,7 +2494,7 @@ static void handle_message_packet_group(Group_Chats *g_c, uint32_t groupnumber, 
             kill_peer_number = net_ntohs(kill_peer_number);
 
             if (peer_number == kill_peer_number) {
-                delpeer(g_c, groupnumber, index, false, userdata);
+                delpeer(g_c, groupnumber, index, userdata, false);
             } else {
                 return;
                 // TODO(irungentoo):
@@ -2835,7 +2845,7 @@ static int groupchat_freeze_timedout(Group_Chats *g_c, uint32_t groupnumber, voi
 
         if (mono_time_is_timeout(g_c->mono_time, g->group[i].last_active, GROUP_PING_INTERVAL * 3)) {
             try_send_rejoin(g_c, groupnumber, g->group[i].real_pk);
-            delpeer(g_c, groupnumber, i, true, userdata);
+            freeze_peer(g_c, groupnumber, i, userdata);
         }
     }
 
