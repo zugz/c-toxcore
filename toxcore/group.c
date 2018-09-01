@@ -1876,7 +1876,7 @@ static int handle_packet_online(Group_Chats *g_c, int friendcon_id, const uint8_
             group_new_peer_send(g_c, groupnumber, g->group[peer_index].peer_number, real_pk, temp_pk);
         }
 
-        group_name_send(g_c, groupnumber, g_c->m->name, g_c->m->name_length);
+        g->need_send_name = true;
     }
 
     ping_groupchat(g_c, groupnumber);
@@ -2034,7 +2034,7 @@ static int handle_send_peers(Group_Chats *g_c, uint32_t groupnumber, const uint8
                 g_c->connected_callback(g_c->m, groupnumber, userdata);
             }
 
-            group_name_send(g_c, groupnumber, g_c->m->name, g_c->m->name_length);
+            g->need_send_name = true;
         }
 
         const int peer_index = addpeer(g_c, groupnumber, d, d + CRYPTO_PUBLIC_KEY_SIZE, peer_num, userdata, false, true);
@@ -2859,6 +2859,7 @@ void send_name_all_groups(Group_Chats *g_c)
 
         if (g->status == GROUPCHAT_STATUS_CONNECTED) {
             group_name_send(g_c, i, g_c->m->name, g_c->m->name_length);
+            g->need_send_name = false;
         }
     }
 }
