@@ -110,7 +110,7 @@ typedef struct Group_c {
     uint8_t status;
 
     bool need_send_name;
-    bool title_stale;
+    bool title_fresh;
 
     Group_Peer *group;
     uint32_t numpeers;

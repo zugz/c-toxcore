@@ -62,8 +62,9 @@ When processing the reply to a Peer Query, we update the DHT pubkey of an
 existing peer if and only if it is frozen or has not had its DHT pubkey
 updated since it last stopped being frozen.
 
-When we receive a Title Response packet, we set the title if it is currently
-empty or if all peers became frozen since we last set the title.
+When we receive a Title Response packet, we set the title if it has never been
+set or if at some point since it was last set, there were no unfrozen peers
+(except us).
 
 ## Discussion
 ### Overview

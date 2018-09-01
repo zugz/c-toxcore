@@ -789,6 +789,8 @@ static int settitle(Group_Chats *g_c, uint32_t groupnumber, int peer_index, cons
     memcpy(g->title, title, title_len);
     g->title_len = title_len;
 
+    g->title_fresh = true;
+
     if (g_c->title_callback) {
         g_c->title_callback(g_c->m, groupnumber, peer_index, title, title_len, userdata);
     }
@@ -2114,9 +2116,8 @@ static void handle_direct_packet(Group_Chats *g_c, uint32_t groupnumber, const u
                 break;
             }
 
-            if (g->title_len == 0 || g->title_stale) {
+            if (!g->title_fresh) {
                 settitle(g_c, groupnumber, -1, data + 1, length - 1, userdata);
-                g->title_stale = false;
             }
         }
 
@@ -2848,7 +2849,7 @@ static int groupchat_freeze_timedout(Group_Chats *g_c, uint32_t groupnumber, voi
     }
 
     if (g->numpeers <= 1) {
-        g->title_stale = true;
+        g->title_fresh = false;
     }
 
     return 0;
