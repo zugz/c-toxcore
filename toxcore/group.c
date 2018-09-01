@@ -812,11 +812,9 @@ static void check_disconnected(Group_Chats *g_c, uint32_t groupnumber, void *use
     }
 
     for (uint32_t i = 0; i < g->numpeers; ++i) {
-        if (id_equal(g->group[i].real_pk, g->real_pk)) {
-            continue;
+        while (i < g->numpeers && !id_equal(g->group[i].real_pk, g->real_pk)) {
+            freeze_peer(g_c, groupnumber, i, userdata);
         }
-
-        freeze_peer(g_c, groupnumber, i, userdata);
     }
 }
 
