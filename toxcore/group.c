@@ -855,7 +855,7 @@ static void set_conns_status_groups(Group_Chats *g_c, int friendcon_id, uint8_t 
     }
 }
 
-static int try_send_rejoin(Group_Chats *g_c, uint32_t groupnumber, const uint8_t *real_pk);
+static bool try_send_rejoin(Group_Chats *g_c, uint32_t groupnumber, const uint8_t *real_pk);
 
 static void rejoin_frozen_friend(Group_Chats *g_c, int friendcon_id)
 {
@@ -1314,21 +1314,21 @@ int invite_friend(Group_Chats *g_c, uint32_t friendnumber, uint32_t groupnumber)
 }
 
 /* Send a rejoin packet to a peer if we have a friend connection to the peer.
- * return 0 if a packet was sent.
- * return -1 otherwise.
+ * return true if a packet was sent.
+ * return false otherwise.
  */
-static int try_send_rejoin(Group_Chats *g_c, uint32_t groupnumber, const uint8_t *real_pk)
+static bool try_send_rejoin(Group_Chats *g_c, uint32_t groupnumber, const uint8_t *real_pk)
 {
     Group_c *g = get_group_c(g_c, groupnumber);
 
     if (!g) {
-        return -1;
+        return false;
     }
 
     const int friendcon_id = getfriend_conn_id_pk(g_c->fr_c, real_pk);
 
     if (friendcon_id == -1) {
-        return -1;
+        return false;
     }
 
     uint8_t packet[1 + 1 + GROUP_ID_LENGTH];
@@ -1338,12 +1338,12 @@ static int try_send_rejoin(Group_Chats *g_c, uint32_t groupnumber, const uint8_t
 
     if (write_cryptpacket(friendconn_net_crypto(g_c->fr_c), friend_connection_crypt_connection_id(g_c->fr_c, friendcon_id),
                           packet, sizeof(packet), 0) == -1) {
-        return -1;
+        return false;
     }
 
     add_conn_to_groupchat(g_c, friendcon_id, groupnumber, GROUPCHAT_CLOSE_REASON_INTRODUCER, 1);
 
-    return 0;
+    return true;
 }
 
 static unsigned int send_peer_query(Group_Chats *g_c, int friendcon_id, uint16_t group_num);
