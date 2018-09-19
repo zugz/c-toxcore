@@ -207,6 +207,8 @@ static void run_conference_tests(Tox **toxes, State *state)
 
     for (uint16_t i = 0; i < NUM_GROUP_TOX; ++i) {
         tox_callback_conference_message(toxes[i], &handle_conference_message);
+
+        iterate_all_wait(NUM_GROUP_TOX, toxes, state, ITERATION_INTERVAL);
     }
 
     TOX_ERR_CONFERENCE_SEND_MESSAGE err;
