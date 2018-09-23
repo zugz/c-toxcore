@@ -36,9 +36,7 @@ static void accept_friend_request(Tox *m, const uint8_t *public_key, const uint8
 }
 
 
-// according to zugz's testing: with NUM_TOXES_TCP=5, consistently passes;
-// often fails with 6; consistently fails with 8 or more.
-#define NUM_TOXES_TCP 8
+#define NUM_TOXES_TCP 20
 #define TCP_RELAY_PORT 33448
 
 #define NUM_TCP_RELAYS (NUM_TOXES_TCP - 1)
@@ -58,7 +56,6 @@ START_TEST(test_many_clients_tcp_b)
         if (i < NUM_TCP_RELAYS) {
             tox_options_set_tcp_port(opts, TCP_RELAY_PORT + i);
         } else {
-            // this is crucial for making the test fail!
             tox_options_set_udp_enabled(opts, 0);
         }
 
@@ -67,14 +64,25 @@ START_TEST(test_many_clients_tcp_b)
         ck_assert_msg(toxes[i] != nullptr, "Failed to create tox instances %u", i);
         tox_callback_friend_request(toxes[i], accept_friend_request);
         uint8_t dpk[TOX_PUBLIC_KEY_SIZE];
+
         if (i >= NUM_TCP_RELAYS) {
-            tox_self_get_dht_id(toxes[(i % NUM_TCP_RELAYS)], dpk);
-            ck_assert_msg(tox_add_tcp_relay(toxes[i], TOX_LOCALHOST, TCP_RELAY_PORT + (i % NUM_TCP_RELAYS), dpk, nullptr),
-                    "add relay error");
+            tox_self_get_dht_id(toxes[i % NUM_TCP_RELAYS], dpk);
+            ck_assert_msg(tox_add_tcp_relay(toxes[i], TOX_LOCALHOST, TCP_RELAY_PORT + i % NUM_TCP_RELAYS, dpk, nullptr),
+                          "add relay error");
+
+            for (j = 0; j < NUM_TCP_RELAYS; j++) {
+                // TCP-only nodes will only announce at nodes they've
+                // bootstrapped to, because LAN addresses are ignored in the
+                // onion. So we manually bootstrap to all dht nodes.
+                tox_self_get_dht_id(toxes[j], dpk);
+                uint16_t port = tox_self_get_udp_port(toxes[j], nullptr);
+                ck_assert_msg(tox_bootstrap(toxes[i], TOX_LOCALHOST, port, dpk, nullptr), "Bootstrap error");
+            }
+        } else {
+            tox_self_get_dht_id(toxes[0], dpk);
+            uint16_t first_port = tox_self_get_udp_port(toxes[0], nullptr);
+            ck_assert_msg(tox_bootstrap(toxes[i], TOX_LOCALHOST, first_port, dpk, nullptr), "Bootstrap error");
         }
-        tox_self_get_dht_id(toxes[0], dpk);
-        uint16_t first_port = tox_self_get_udp_port(toxes[0], nullptr);
-        ck_assert_msg(tox_bootstrap(toxes[i], TOX_LOCALHOST, first_port, dpk, nullptr), "Bootstrap error");
 
         tox_options_free(opts);
     }
@@ -89,7 +97,7 @@ START_TEST(test_many_clients_tcp_b)
             TOX_ERR_FRIEND_ADD test;
             uint32_t num = tox_friend_add(toxes[j], address, (const uint8_t *)"Gentoo", 7, &test);
 
-            ck_assert_msg(test == TOX_ERR_FRIEND_ADD_OK, "Tox %u failed to add tox %u" , i, j);
+            ck_assert_msg(test == TOX_ERR_FRIEND_ADD_OK, "Tox %u failed to add tox %u", i, j);
 
             ck_assert_msg(num != UINT32_MAX && test == TOX_ERR_FRIEND_ADD_OK, "Failed to add friend error code: %i", test);
         }
@@ -112,6 +120,7 @@ START_TEST(test_many_clients_tcp_b)
         for (i = 0; i < NUM_TOXES_TCP; ++i) {
             for (j = 0; j < tox_self_get_friend_list_size(toxes[i]); ++j) {
                 count++;
+
                 if (tox_friend_get_connection_status(toxes[i], j, nullptr) == TOX_CONNECTION_NONE) {
                     failcount++;
                 }
@@ -122,6 +131,7 @@ START_TEST(test_many_clients_tcp_b)
             printf("%d:%d\n", failcount, count);
             last_count = failcount;
         }
+
         if (failcount == 0 && count == NUM_FRIENDS * 2) {
             break;
         }
