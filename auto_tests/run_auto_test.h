@@ -48,7 +48,10 @@ static uint64_t get_state_clock_callback(Mono_Time *mono_time, void *user_data)
     return state->clock;
 }
 
-static void run_auto_test(uint32_t tox_count, void test(Tox **toxes, State *state), bool chain)
+static void run_auto_test(uint32_t tox_count,
+                          void test(Tox **toxes, State *state),
+                          bool chain, struct Tox_Options **opts_list,
+                          void extra_bootstrapping(Tox **toxes, State *state))
 {
     printf("initialising %u toxes\n", tox_count);
     Tox **toxes = (Tox **)calloc(tox_count, sizeof(Tox *));
@@ -56,7 +59,13 @@ static void run_auto_test(uint32_t tox_count, void test(Tox **toxes, State *stat
 
     for (uint32_t i = 0; i < tox_count; i++) {
         state[i].index = i;
-        toxes[i] = tox_new_log(nullptr, nullptr, &state[i].index);
+        struct Tox_Options *opts = nullptr;
+
+        if (opts_list != nullptr) {
+            opts = opts_list[i];
+        }
+
+        toxes[i] = tox_new_log(opts, nullptr, &state[i].index);
         ck_assert_msg(toxes[i], "failed to create %u tox instances", i + 1);
 
         // TODO(iphydf): Don't rely on toxcore internals.
@@ -98,6 +107,10 @@ static void run_auto_test(uint32_t tox_count, void test(Tox **toxes, State *stat
     uint8_t dht_key[TOX_PUBLIC_KEY_SIZE];
     tox_self_get_dht_id(toxes[0], dht_key);
     const uint16_t dht_port = tox_self_get_udp_port(toxes[0], nullptr);
+
+    if (extra_bootstrapping != nullptr) {
+        extra_bootstrapping(toxes, state);
+    }
 
     for (uint32_t i = 1; i < tox_count; i++) {
         tox_bootstrap(toxes[i], "localhost", dht_port, dht_key, nullptr);
