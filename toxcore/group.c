@@ -814,8 +814,6 @@ static int freeze_peer(Group_Chats *g_c, uint32_t groupnumber, int peer_index, v
         return -1;
     }
 
-    try_send_rejoin(g_c, groupnumber, g->group[peer_index].real_pk);
-
     Group_Peer *temp = (Group_Peer *)realloc(g->frozen, sizeof(Group_Peer) * (g->numfrozen + 1));
 
     if (temp == nullptr) {
@@ -825,11 +823,18 @@ static int freeze_peer(Group_Chats *g_c, uint32_t groupnumber, int peer_index, v
     g->frozen = temp;
     g->frozen[g->numfrozen] = g->group[peer_index];
     g->frozen[g->numfrozen].object = nullptr;
+
+    if (delpeer(g_c, groupnumber, peer_index, userdata, true) != 0) {
+        return -1;
+    }
+
     ++g->numfrozen;
+
+    try_send_rejoin(g_c, groupnumber, g->frozen[g->numfrozen].real_pk);
 
     delete_old_frozen(g);
 
-    return delpeer(g_c, groupnumber, peer_index, userdata, true);
+    return 0;
 }
 
 
