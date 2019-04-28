@@ -803,8 +803,6 @@ static bool delete_old_frozen(Group_c *g)
     return true;
 }
 
-static bool try_send_rejoin(Group_Chats *g_c, uint32_t groupnumber, const uint8_t *real_pk);
-
 static bool freeze_peer(Group_Chats *g_c, uint32_t groupnumber, int peer_index, void *userdata)
 {
     Group_c *g = get_group_c(g_c, groupnumber);
@@ -826,8 +824,6 @@ static bool freeze_peer(Group_Chats *g_c, uint32_t groupnumber, int peer_index, 
     if (!delpeer(g_c, groupnumber, peer_index, userdata, true)) {
         return false;
     }
-
-    try_send_rejoin(g_c, groupnumber, g->frozen[g->numfrozen].real_pk);
 
     ++g->numfrozen;
 
@@ -969,6 +965,8 @@ static void set_conns_status_groups(Group_Chats *g_c, int friendcon_id, uint8_t 
     }
 }
 
+static bool send_rejoin(Group_Chats *g_c, uint32_t groupnumber, int friendcon_id);
+
 static void rejoin_frozen_friend(Group_Chats *g_c, int friendcon_id)
 {
     uint8_t real_pk[CRYPTO_PUBLIC_KEY_SIZE];
@@ -983,7 +981,7 @@ static void rejoin_frozen_friend(Group_Chats *g_c, int friendcon_id)
 
         for (uint32_t j = 0; j < g->numfrozen; ++j) {
             if (id_equal(g->frozen[j].real_pk, real_pk)) {
-                try_send_rejoin(g_c, i, real_pk);
+                send_rejoin(g_c, i, friendcon_id);
                 break;
             }
         }
@@ -1500,21 +1498,15 @@ int invite_friend(Group_Chats *g_c, uint32_t friendnumber, uint32_t groupnumber)
     return -2;
 }
 
-/* Send a rejoin packet to a peer if we have a friend connection to the peer.
- * return true if a packet was sent.
- * return false otherwise.
+/* Send a rejoin packet.
+ *
+ * return true on success.
  */
-static bool try_send_rejoin(Group_Chats *g_c, uint32_t groupnumber, const uint8_t *real_pk)
+static bool send_rejoin(Group_Chats *g_c, uint32_t groupnumber, int friendcon_id)
 {
     Group_c *g = get_group_c(g_c, groupnumber);
 
     if (!g) {
-        return false;
-    }
-
-    const int friendcon_id = getfriend_conn_id_pk(g_c->fr_c, real_pk);
-
-    if (friendcon_id == -1) {
         return false;
     }
 
