@@ -551,7 +551,7 @@ static int note_peer_active(Group_Chats *g_c, uint32_t groupnumber, uint16_t pee
     return thawed_index;
 }
 
-static bool delpeer(Group_Chats *g_c, uint32_t groupnumber, int peer_index, void *userdata, bool keep_connection);
+static bool delpeer(Group_Chats *g_c, uint32_t groupnumber, int peer_index, void *userdata);
 
 static void delete_any_peer_with_pk(Group_Chats *g_c, uint32_t groupnumber, const uint8_t *real_pk, void *userdata)
 {
@@ -564,7 +564,7 @@ static void delete_any_peer_with_pk(Group_Chats *g_c, uint32_t groupnumber, cons
     const int peer_index = peer_in_group(g, real_pk);
 
     if (peer_index >= 0) {
-        delpeer(g_c, groupnumber, peer_index, userdata, false);
+        delpeer(g_c, groupnumber, peer_index, userdata);
     }
 
     const int frozen_index = frozen_in_group(g, real_pk);
@@ -705,7 +705,7 @@ static void remove_from_closest(Group_c *g, int peer_index)
  *
  * return true on success
  */
-static bool delpeer(Group_Chats *g_c, uint32_t groupnumber, int peer_index, void *userdata, bool keep_connection);
+static bool delpeer(Group_Chats *g_c, uint32_t groupnumber, int peer_index, void *userdata)
 {
     Group_c *g = get_group_c(g_c, groupnumber);
 
@@ -717,7 +717,7 @@ static bool delpeer(Group_Chats *g_c, uint32_t groupnumber, int peer_index, void
 
     const int friendcon_id = getfriend_conn_id_pk(g_c->fr_c, g->group[peer_index].real_pk);
 
-    if (friendcon_id != -1 && !keep_connection) {
+    if (friendcon_id != -1) {
         remove_close_conn(g_c, groupnumber, friendcon_id);
     }
 
@@ -821,7 +821,7 @@ static bool freeze_peer(Group_Chats *g_c, uint32_t groupnumber, int peer_index, 
     g->frozen[g->numfrozen] = g->group[peer_index];
     g->frozen[g->numfrozen].object = nullptr;
 
-    if (!delpeer(g_c, groupnumber, peer_index, userdata, true)) {
+    if (!delpeer(g_c, groupnumber, peer_index, userdata)) {
         return false;
     }
 
@@ -2696,7 +2696,7 @@ static void handle_message_packet_group(Group_Chats *g_c, uint32_t groupnumber, 
 
             if (peer_number == kill_peer_number) {
                 if (message_id == GROUP_MESSAGE_KILL_PEER_ID) {
-                    delpeer(g_c, groupnumber, index, userdata, false);
+                    delpeer(g_c, groupnumber, index, userdata);
                 } else {
                     freeze_peer(g_c, groupnumber, index, userdata);
                 }
