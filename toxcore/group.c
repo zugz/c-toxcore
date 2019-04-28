@@ -828,9 +828,9 @@ static int freeze_peer(Group_Chats *g_c, uint32_t groupnumber, int peer_index, v
         return -1;
     }
 
-    ++g->numfrozen;
-
     try_send_rejoin(g_c, groupnumber, g->frozen[g->numfrozen].real_pk);
+
+    ++g->numfrozen;
 
     delete_old_frozen(g);
 
