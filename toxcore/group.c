@@ -909,28 +909,6 @@ static bool settitle(Group_Chats *g_c, uint32_t groupnumber, int peer_index, con
     return true;
 }
 
-/* Check if the group has no online connection, and freeze all peers if so */
-static void check_disconnected(Group_Chats *g_c, uint32_t groupnumber, void *userdata)
-{
-    Group_c *g = get_group_c(g_c, groupnumber);
-
-    if (!g) {
-        return;
-    }
-
-    for (uint32_t i = 0; i < MAX_GROUP_CONNECTIONS; ++i) {
-        if (g->close[i].type == GROUPCHAT_CLOSE_ONLINE) {
-            return;
-        }
-    }
-
-    for (uint32_t i = 0; i < g->numpeers; ++i) {
-        while (i < g->numpeers && !id_equal(g->group[i].real_pk, g->real_pk)) {
-            freeze_peer(g_c, groupnumber, i, userdata);
-        }
-    }
-}
-
 static void set_conns_type_close(Group_Chats *g_c, uint32_t groupnumber, int friendcon_id, uint8_t type, void *userdata)
 {
     Group_c *g = get_group_c(g_c, groupnumber);
@@ -952,7 +930,6 @@ static void set_conns_type_close(Group_Chats *g_c, uint32_t groupnumber, int fri
             send_packet_online(g_c->fr_c, friendcon_id, groupnumber, g->type, g->id);
         } else {
             g->close[i].type = type;
-            check_disconnected(g_c, groupnumber, userdata);
         }
     }
 }
