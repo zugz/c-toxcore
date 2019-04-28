@@ -1074,6 +1074,7 @@ static unsigned int send_peer_introduced(Group_Chats *g_c, int friendcon_id, uin
  */
 static void remove_conn_reason(Group_Chats *g_c, uint32_t groupnumber, uint16_t i, uint8_t reason)
 {
+    // FIXME: why don't we just pass around `Group_c*`s?
     Group_c *g = get_group_c(g_c, groupnumber);
 
     if (!g) {
@@ -2756,6 +2757,7 @@ static void handle_message_packet_group(Group_Chats *g_c, uint32_t groupnumber, 
             return;
     }
 
+    // TODO(zugz): relay back to sender iff message is from sender?
     send_message_all_close(g_c, groupnumber, data, length, -1/* TODO(irungentoo) close_index */);
 }
 
