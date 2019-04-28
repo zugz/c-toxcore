@@ -759,7 +759,7 @@ static int cmp_u64(uint64_t a, uint64_t b)
     return (a > b) - (a < b);
 }
 
-/* Order peers with friends first and increasing with last active time */
+/* Order peers with friends first and with more recently active earlier */
 static int cmp_frozen(const void *a, const void *b)
 {
     const Group_Peer *pa = (const Group_Peer *) a;
@@ -769,7 +769,7 @@ static int cmp_frozen(const void *a, const void *b)
         return pa->is_friend ? -1 : 1;
     }
 
-    return cmp_u64(pa->last_active, pb->last_active);
+    return cmp_u64(pb->last_active, pa->last_active);
 }
 
 /* Delete frozen peers as necessary to ensure at most g->maxfrozen remain.
