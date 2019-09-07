@@ -189,6 +189,16 @@ cc_library(
     name = "onion",
     srcs = ["onion.c"],
     hdrs = ["onion.h"],
+    deps = [
+        ":DHT",
+        ":forwarding",
+    ],
+)
+
+cc_library(
+    name = "forwarding",
+    srcs = ["forwarding.c"],
+    hdrs = ["forwarding.h"],
     deps = [":DHT"],
 )
 
