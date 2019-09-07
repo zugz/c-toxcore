@@ -229,7 +229,9 @@ cc_library(
     name = "onion_announce",
     srcs = ["onion_announce.c"],
     hdrs = ["onion_announce.h"],
-    deps = [":onion"],
+    deps = [":onion",
+            ":timed_auth",
+    ],
 )
 
 cc_library(
