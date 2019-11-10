@@ -1760,6 +1760,7 @@ static int create_crypto_connection(Net_Crypto *c)
             }
 
             if (pthread_mutex_init(c->crypto_connections[i].mutex, nullptr) != 0) {
+                free(c->crypto_connections[i].mutex);
                 pthread_mutex_unlock(&c->connections_mutex);
                 return -1;
             }
@@ -1797,6 +1798,7 @@ static int create_crypto_connection(Net_Crypto *c)
         }
 
         if (pthread_mutex_init(c->crypto_connections[id].mutex, nullptr) != 0) {
+            free(c->crypto_connections[id].mutex);
             pthread_mutex_unlock(&c->connections_mutex);
             return -1;
         }
@@ -1813,6 +1815,8 @@ static int create_crypto_connection(Net_Crypto *c)
  */
 static int wipe_crypto_connection(Net_Crypto *c, int crypt_connection_id)
 {
+    // prevent double free, by checking if status == CRYPTO_CONN_NO_CONNECTION
+    // only this function is allowed to set status to CRYPTO_CONN_NO_CONNECTION
     if (crypt_connection_id_not_valid(c, crypt_connection_id)) {
         return -1;
     }
@@ -1820,7 +1824,6 @@ static int wipe_crypto_connection(Net_Crypto *c, int crypt_connection_id)
     uint32_t i;
 
     pthread_mutex_destroy(c->crypto_connections[crypt_connection_id].mutex);
-    // free memory before destroying the pointer to prevent a leak
     free(c->crypto_connections[crypt_connection_id].mutex);
     crypto_memzero(&c->crypto_connections[crypt_connection_id], sizeof(Crypto_Connection));
 
@@ -2017,7 +2020,7 @@ int accept_crypto_connection(Net_Crypto *c, New_Connection *n_c)
         pthread_mutex_lock(&c->tcp_mutex);
         kill_tcp_connection_to(c->tcp_c, conn->connection_number_tcp);
         pthread_mutex_unlock(&c->tcp_mutex);
-        conn->status = CRYPTO_CONN_NO_CONNECTION;
+        wipe_crypto_connection(c, crypt_connection_id);
         return -1;
     }
 
@@ -2080,7 +2083,7 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
         pthread_mutex_lock(&c->tcp_mutex);
         kill_tcp_connection_to(c->tcp_c, conn->connection_number_tcp);
         pthread_mutex_unlock(&c->tcp_mutex);
-        conn->status = CRYPTO_CONN_NO_CONNECTION;
+        wipe_crypto_connection(c, crypt_connection_id);
         return -1;
     }
 
