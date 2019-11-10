@@ -1749,6 +1749,16 @@ static int realloc_cryptoconnection(Net_Crypto *c, uint32_t num)
  */
 static int create_crypto_connection(Net_Crypto *c)
 {
+    while (1) { /* TODO(irungentoo): is this really the best way to do this? */
+        pthread_mutex_lock(&c->connections_mutex);
+
+        if (!c->connection_use_counter) {
+            break;
+        }
+
+        pthread_mutex_unlock(&c->connections_mutex);
+    }
+
     for (uint32_t i = 0; i < c->crypto_connections_length; ++i) {
         if (c->crypto_connections[i].status == CRYPTO_CONN_NO_CONNECTION) {
             /* On destruction the connection struct is zeroed and the mutex memory freed,
@@ -1756,6 +1766,7 @@ static int create_crypto_connection(Net_Crypto *c)
             c->crypto_connections[i].mutex = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t));
 
             if (c->crypto_connections[i].mutex == nullptr) {
+                pthread_mutex_unlock(&c->connections_mutex);
                 return -1;
             }
 
@@ -1765,18 +1776,9 @@ static int create_crypto_connection(Net_Crypto *c)
                 return -1;
             }
 
+            pthread_mutex_unlock(&c->connections_mutex);
             return i;
         }
-    }
-
-    while (1) { /* TODO(irungentoo): is this really the best way to do this? */
-        pthread_mutex_lock(&c->connections_mutex);
-
-        if (!c->connection_use_counter) {
-            break;
-        }
-
-        pthread_mutex_unlock(&c->connections_mutex);
     }
 
     int id = -1;
@@ -1794,6 +1796,7 @@ static int create_crypto_connection(Net_Crypto *c)
         c->crypto_connections[id].mutex = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t));
 
         if (c->crypto_connections[id].mutex == nullptr) {
+            pthread_mutex_unlock(&c->connections_mutex);
             return -1;
         }
 
