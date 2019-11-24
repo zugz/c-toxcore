@@ -48,6 +48,17 @@ typedef struct Packets_Array {
     uint32_t  buffer_end; /* packet numbers in array: {buffer_start, buffer_end) */
 } Packets_Array;
 
+typedef enum Crypto_Conn_State {
+    CRYPTO_CONN_FREE = 0,           /* the connection slot is free, explicitly 0 to stay valid after
+                                     * crypto_memzero(...) of the parent struct
+                                     */
+    CRYPTO_CONN_NO_CONNECTION,       /* the connection is allocated, but not yet used */
+    CRYPTO_CONN_COOKIE_REQUESTING,   /* we are sending cookie request packets */
+    CRYPTO_CONN_HANDSHAKE_SENT,      /* we are sending handshake packets */
+    CRYPTO_CONN_NOT_CONFIRMED,       /* send handshake packets, we have received one from the other, but no data */
+    CRYPTO_CONN_ESTABLISHED,         /* the connection is established */
+} Crypto_Conn_State;
+
 typedef struct Crypto_Connection {
     uint8_t public_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The real public key of the peer. */
     uint8_t recv_nonce[CRYPTO_NONCE_SIZE]; /* Nonce of received packets. */
@@ -56,14 +67,7 @@ typedef struct Crypto_Connection {
     uint8_t sessionsecret_key[CRYPTO_SECRET_KEY_SIZE]; /* Our private key for this session. */
     uint8_t peersessionpublic_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The public key of the peer. */
     uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE]; /* The precomputed shared key from encrypt_precompute. */
-    /**
-     * 0 if no connection,
-     * 1 we are sending cookie request packets,
-     * 2 if we are sending handshake packets,
-     * 3 if connection is not confirmed yet (we have received a handshake but no data packets yet),
-     * 4 if the connection is established.
-     */
-    Crypto_Conn_State status;
+    Crypto_Conn_State status; /* See Crypto_Conn_State documentation */
     uint64_t cookie_request_number; /* number used in the cookie request packets for this connection */
     uint8_t dht_public_key[CRYPTO_PUBLIC_KEY_SIZE]; /* The dht public key of the peer */
 
@@ -194,7 +198,9 @@ static uint8_t crypt_connection_id_not_valid(const Net_Crypto *c, int crypt_conn
         return 1;
     }
 
-    if (c->crypto_connections[crypt_connection_id].status == CRYPTO_CONN_NO_CONNECTION) {
+    const Crypto_Conn_State status = c->crypto_connections[crypt_connection_id].status;
+
+    if (status == CRYPTO_CONN_NO_CONNECTION || status == CRYPTO_CONN_FREE) {
         return 1;
     }
 
@@ -687,6 +693,8 @@ static int send_packet_to(Net_Crypto *c, int crypt_connection_id, const uint8_t 
     // TODO(irungentoo): on bad networks, direct connections might not last indefinitely.
     if (!net_family_is_unspec(ip_port.ip.family)) {
         bool direct_connected = 0;
+
+        // FIXME(sudden6): handle return value
         crypto_connection_status(c, crypt_connection_id, &direct_connected, nullptr);
 
         if (direct_connected) {
@@ -1760,7 +1768,7 @@ static int create_crypto_connection(Net_Crypto *c)
     }
 
     for (uint32_t i = 0; i < c->crypto_connections_length; ++i) {
-        if (c->crypto_connections[i].status == CRYPTO_CONN_NO_CONNECTION) {
+        if (c->crypto_connections[i].status == CRYPTO_CONN_FREE) {
             /* On destruction the connection struct is zeroed and the mutex memory freed,
              * allocate here again */
             c->crypto_connections[i].mutex = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t));
@@ -1776,6 +1784,7 @@ static int create_crypto_connection(Net_Crypto *c)
                 return -1;
             }
 
+            c->crypto_connections[i].status = CRYPTO_CONN_NO_CONNECTION;
             pthread_mutex_unlock(&c->connections_mutex);
             return i;
         }
@@ -1805,6 +1814,8 @@ static int create_crypto_connection(Net_Crypto *c)
             pthread_mutex_unlock(&c->connections_mutex);
             return -1;
         }
+
+        c->crypto_connections[id].status = CRYPTO_CONN_NO_CONNECTION;
     }
 
     pthread_mutex_unlock(&c->connections_mutex);
@@ -1818,9 +1829,18 @@ static int create_crypto_connection(Net_Crypto *c)
  */
 static int wipe_crypto_connection(Net_Crypto *c, int crypt_connection_id)
 {
-    // prevent double free, by checking if status == CRYPTO_CONN_NO_CONNECTION
-    // only this function is allowed to set status to CRYPTO_CONN_NO_CONNECTION
-    if (crypt_connection_id_not_valid(c, crypt_connection_id)) {
+    // prevent double free, by checking if status == CRYPTO_CONN_FREE
+    if ((uint32_t)crypt_connection_id >= c->crypto_connections_length) {
+        return -1;
+    }
+
+    if (c->crypto_connections == nullptr) {
+        return -1;
+    }
+
+    const Crypto_Conn_State status = c->crypto_connections[crypt_connection_id].status;
+
+    if (status == CRYPTO_CONN_FREE) {
         return -1;
     }
 
@@ -1832,7 +1852,7 @@ static int wipe_crypto_connection(Net_Crypto *c, int crypt_connection_id)
 
     /* check if we can resize the connections array */
     for (i = c->crypto_connections_length; i != 0; --i) {
-        if (c->crypto_connections[i - 1].status != CRYPTO_CONN_NO_CONNECTION) {
+        if (c->crypto_connections[i - 1].status != CRYPTO_CONN_FREE) {
             break;
         }
     }
@@ -1853,10 +1873,12 @@ static int wipe_crypto_connection(Net_Crypto *c, int crypt_connection_id)
 static int getcryptconnection_id(const Net_Crypto *c, const uint8_t *public_key)
 {
     for (uint32_t i = 0; i < c->crypto_connections_length; ++i) {
-        if (c->crypto_connections[i].status != CRYPTO_CONN_NO_CONNECTION) {
-            if (public_key_cmp(public_key, c->crypto_connections[i].public_key) == 0) {
-                return i;
-            }
+        if (crypt_connection_id_not_valid(c, i)) {
+            continue;
+        }
+
+        if (public_key_cmp(public_key, c->crypto_connections[i].public_key) == 0) {
+            return i;
         }
     }
 
@@ -2007,6 +2029,7 @@ int accept_crypto_connection(Net_Crypto *c, New_Connection *n_c)
     pthread_mutex_unlock(&c->tcp_mutex);
 
     if (connection_number_tcp == -1) {
+        wipe_crypto_connection(c, crypt_connection_id);
         return -1;
     }
 
@@ -2063,6 +2086,7 @@ int new_crypto_connection(Net_Crypto *c, const uint8_t *real_public_key, const u
     pthread_mutex_unlock(&c->tcp_mutex);
 
     if (connection_number_tcp == -1) {
+        wipe_crypto_connection(c, crypt_connection_id);
         return -1;
     }
 
@@ -2283,19 +2307,19 @@ static void do_tcp(Net_Crypto *c, void *userdata)
             continue;
         }
 
-        if (conn->status == CRYPTO_CONN_ESTABLISHED) {
-            bool direct_connected = 0;
-            crypto_connection_status(c, i, &direct_connected, nullptr);
+        bool direct_connected = 0;
 
-            if (direct_connected) {
-                pthread_mutex_lock(&c->tcp_mutex);
-                set_tcp_connection_to_status(c->tcp_c, conn->connection_number_tcp, 0);
-                pthread_mutex_unlock(&c->tcp_mutex);
-            } else {
-                pthread_mutex_lock(&c->tcp_mutex);
-                set_tcp_connection_to_status(c->tcp_c, conn->connection_number_tcp, 1);
-                pthread_mutex_unlock(&c->tcp_mutex);
-            }
+        // FIXME(sudden6): handle return value
+        crypto_connection_status(c, i, &direct_connected, nullptr);
+
+        if (direct_connected) {
+            pthread_mutex_lock(&c->tcp_mutex);
+            set_tcp_connection_to_status(c->tcp_c, conn->connection_number_tcp, 0);
+            pthread_mutex_unlock(&c->tcp_mutex);
+        } else {
+            pthread_mutex_lock(&c->tcp_mutex);
+            set_tcp_connection_to_status(c->tcp_c, conn->connection_number_tcp, 1);
+            pthread_mutex_unlock(&c->tcp_mutex);
         }
     }
 }
@@ -2566,6 +2590,7 @@ static void send_crypto_packets(Net_Crypto *c)
                                                (CONGESTION_QUEUE_ARRAY_SIZE * CONGESTION_LAST_SENT_ARRAY_SIZE);
 
                 bool direct_connected = 0;
+                /* return value can be ignored since the `if` above ensures the connection is established */
                 crypto_connection_status(c, i, &direct_connected, nullptr);
 
                 /* When switching from TCP to UDP, don't change the packet send rate for CONGESTION_EVENT_TIMEOUT ms. */
@@ -2905,18 +2930,17 @@ int crypto_kill(Net_Crypto *c, int crypt_connection_id)
     return ret;
 }
 
-/* return one of CRYPTO_CONN_* values indicating the state of the connection.
- *
- * sets direct_connected to 1 if connection connects directly to other, 0 if it isn't.
- * sets online_tcp_relays to the number of connected tcp relays this connection has.
- */
-Crypto_Conn_State crypto_connection_status(const Net_Crypto *c, int crypt_connection_id, bool *direct_connected,
-        unsigned int *online_tcp_relays)
+bool crypto_connection_status(const Net_Crypto *c, int crypt_connection_id, bool *direct_connected,
+                              unsigned int *online_tcp_relays)
 {
     Crypto_Connection *conn = get_crypto_connection(c, crypt_connection_id);
 
     if (conn == nullptr) {
-        return CRYPTO_CONN_NO_CONNECTION;
+        return false;
+    }
+
+    if (conn->status != CRYPTO_CONN_ESTABLISHED) {
+        return false;
     }
 
     if (direct_connected) {
@@ -2937,7 +2961,7 @@ Crypto_Conn_State crypto_connection_status(const Net_Crypto *c, int crypt_connec
         *online_tcp_relays = tcp_connection_to_online_tcp_relays(c->tcp_c, conn->connection_number_tcp);
     }
 
-    return conn->status;
+    return true;
 }
 
 void new_keys(Net_Crypto *c)
@@ -3023,10 +3047,6 @@ static void kill_timedout(Net_Crypto *c, void *userdata)
         Crypto_Connection *conn = get_crypto_connection(c, i);
 
         if (conn == nullptr) {
-            continue;
-        }
-
-        if (conn->status == CRYPTO_CONN_NO_CONNECTION) {
             continue;
         }
 
