@@ -2297,6 +2297,9 @@ static void do_tcp(Net_Crypto *c, void *userdata)
             continue;
         }
 
+        // REVIEW: why was the test
+        // (conn->status == CRYPTO_CONN_ESTABLISHED)
+        // removed here by commit cab510a5c4c9c22038c7c767df0afbcaef7dce6c?
         bool direct_connected = 0;
 
         // FIXME(sudden6): handle return value
@@ -2930,6 +2933,7 @@ bool crypto_connection_status(const Net_Crypto *c, int crypt_connection_id, bool
     }
 
     if (conn->status != CRYPTO_CONN_ESTABLISHED) {
+        // REVIEW: are you sure we shouldn't set direct_connected and online_tcp_relays in this case anyway?
         return false;
     }
 
