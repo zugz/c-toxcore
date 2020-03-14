@@ -1000,6 +1000,8 @@ static int handle_TCP_packet(TCP_Server *tcp_server, uint32_t con_id, const uint
             net_pack_u32(sendback_data + 1, con_id);
             net_pack_u64(sendback_data + 1 + sizeof(uint32_t), con->identifier);
 
+            // TODO(zugz): add timed auth to the sendback
+
             IP_Port dest;
             const int ipport_length = unpack_ip_port(&dest, data + 1, length - 1, false);
 
@@ -1009,6 +1011,8 @@ static int handle_TCP_packet(TCP_Server *tcp_server, uint32_t con_id, const uint
 
             if (dest.port < 1024) {
                 /* Reject forward request to reserved port */
+                // TODO(zugz): also check for IP addresses which aren't
+                // publically routable.
                 return -1;
             }
 
