@@ -36,6 +36,7 @@ TESTS = \
 	set_name_test \
 	set_status_message_test \
 	skeleton_test \
+	tcp_backup_test \
 	TCP_test \
 	tcp_relay_test \
 	tox_many_tcp_test \
@@ -198,6 +199,10 @@ skeleton_test_LDADD = $(AUTOTEST_LDADD)
 tcp_relay_test_SOURCES = ../auto_tests/tcp_relay_test.c
 tcp_relay_test_CFLAGS = $(AUTOTEST_CFLAGS)
 tcp_relay_test_LDADD = $(AUTOTEST_LDADD)
+
+tox_many_tcp_test_SOURCES = ../auto_tests/tcp_backup_test.c
+tox_many_tcp_test_CFLAGS = $(AUTOTEST_CFLAGS)
+tox_many_tcp_test_LDADD = $(AUTOTEST_LDADD)
 
 TCP_test_SOURCES = ../auto_tests/TCP_test.c
 TCP_test_CFLAGS = $(AUTOTEST_CFLAGS)
