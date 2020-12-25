@@ -29,17 +29,38 @@
 #define MAX_SENDBACK_SIZE (0xff - 1)
 #define MAX_FORWARD_DATA_SIZE (MAX_UDP_PACKET_SIZE - (1 + 1 + MAX_SENDBACK_SIZE))
 
+#define MAX_FORWARD_CHAIN_SIZE 4
+
 #define MAX_PACKED_IPPORT_SIZE (1 + SIZE_IP6 + sizeof(uint16_t))
 
 typedef struct Forwarding Forwarding;
 
-/* Send data to forwarder for forwarding to dest.
- * Maximum length of data is MAX_FORWARD_DATA_SIZE.
+/* Send data to forwarder for forwarding via chain of dht nodes.
+ * Destination is last key in the chain.
+ * Maximum data_length is MAX_FORWARD_DATA_SIZE.
+ * Maximum chain_length MAX_FORWARD_CHAIN_SIZE, minimum 1.
  *
  * return true on success, false otherwise.
  */
-bool request_forwarding(Networking_Core *net, IP_Port forwarder, const uint8_t *public_key,
-                        const uint8_t *data, uint16_t length);
+bool send_forward_request(Networking_Core *net, IP_Port forwarder,
+                          const uint8_t *chain_keys, uint16_t chain_length,
+                          const uint8_t *data, uint16_t data_length);
+
+/* Returns size of packet written by create_forward_chain_packet.
+ */
+uint16_t forward_chain_packet_size(uint16_t chain_length, uint16_t data_length);
+
+/* Create forward request packet for forwarding data via chain of dht nodes.
+ * Destination is last key in the chain.
+ * Maximum data_length is MAX_FORWARD_DATA_SIZE.
+ * Maximum chain length MAX_FORWARD_CHAIN_SIZE, minimum 1.
+ * Writes forward_chain_packet_size(chain_length, data_length) bytes to packet.
+ *
+ * return true on success, false otherwise.
+ */
+bool create_forward_chain_packet(const uint8_t *chain_keys, uint16_t chain_length,
+                                 const uint8_t *data, uint16_t data_length,
+                                 uint8_t *packet);
 
 /* Send reply to forwarded packet via forwarder.
  * Maximum length of data is MAX_FORWARD_DATA_SIZE.

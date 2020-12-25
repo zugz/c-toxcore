@@ -2276,33 +2276,19 @@ int send_tcp_onion_request(Net_Crypto *c, unsigned int tcp_connections_number, c
 }
 
 /* Send a forward request to the TCP relay with IP_Port tcp_forwarder,
- * requesting to forward data to dest.
+ * requesting to forward data via a chain of dht nodes starting with dht_node.
+ * A chain_length of 0 means that dht_node is the final destination of data.
  *
  * return 0 on success.
  * return -1 on failure.
  */
-int send_tcp_forward_request(Net_Crypto *c, IP_Port tcp_forwarder,
-                             IP_Port dest, const uint8_t *data, uint16_t length)
+int send_tcp_forward_request(Net_Crypto *c, IP_Port tcp_forwarder, IP_Port dht_node,
+                             const uint8_t *chain_keys, uint16_t chain_length,
+                             const uint8_t *data, uint16_t data_length)
 {
     pthread_mutex_lock(&c->tcp_mutex);
-    int ret = tcp_send_forward_request(c->tcp_c, tcp_forwarder, dest, data, length);
-    pthread_mutex_unlock(&c->tcp_mutex);
-
-    return ret;
-}
-
-/* Send a forward request to the TCP relay with IP_Port tcp_forwarder,
- * requesting to forward data to dest via DHT node dht_forwarder.
- *
- * return 0 on success.
- * return -1 on failure.
- */
-int send_tcp_double_forward_request(Net_Crypto *c,
-                                    IP_Port tcp_forwarder, IP_Port dht_forwarder, const uint8_t *dest_public_key,
-                                    const uint8_t *data, uint16_t length)
-{
-    pthread_mutex_lock(&c->tcp_mutex);
-    int ret = tcp_send_double_forward_request(c->tcp_c, tcp_forwarder, dht_forwarder, dest_public_key, data, length);
+    int ret = tcp_send_forward_request(c->tcp_c, tcp_forwarder, dht_node,
+                                       chain_keys, chain_length, data, data_length);
     pthread_mutex_unlock(&c->tcp_mutex);
 
     return ret;

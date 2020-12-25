@@ -44,15 +44,42 @@ struct Forwarding {
 
 #define SENDBACK_TIMEOUT 3600
 
-bool request_forwarding(Networking_Core *net, IP_Port forwarder, const uint8_t *public_key, const uint8_t *data,
-                        uint16_t length)
+bool send_forward_request(Networking_Core *net, IP_Port forwarder,
+                          const uint8_t *chain_keys, uint16_t chain_length,
+                          const uint8_t *data, uint16_t data_length)
 {
-    const uint16_t len = 1 + CRYPTO_PUBLIC_KEY_SIZE + length;
+    const uint16_t len = forward_chain_packet_size(chain_length, data_length);
     VLA(uint8_t, packet, len);
-    packet[0] = NET_PACKET_FORWARD_REQUEST;
-    memcpy(packet + 1, public_key, CRYPTO_PUBLIC_KEY_SIZE);
-    memcpy(packet + 1 + CRYPTO_PUBLIC_KEY_SIZE, data, length);
-    return (sendpacket(net, forwarder, packet, len) == len);
+
+    return (create_forward_chain_packet(chain_keys, chain_length, data, data_length, packet)
+            && sendpacket(net, forwarder, packet, len) == len);
+}
+
+uint16_t forward_chain_packet_size(uint16_t chain_length, uint16_t data_length)
+{
+    return chain_length * (1 + CRYPTO_PUBLIC_KEY_SIZE) + data_length;
+}
+
+bool create_forward_chain_packet(const uint8_t *chain_keys, uint16_t chain_length,
+                                 const uint8_t *data, uint16_t data_length,
+                                 uint8_t *packet)
+{
+    if (chain_length == 0 || chain_length > MAX_FORWARD_CHAIN_SIZE
+            || data_length > MAX_FORWARD_DATA_SIZE) {
+        return false;
+    }
+
+    uint16_t i = 0;
+
+    for (uint8_t j = 0; j < chain_length; ++j) {
+        packet[i] = NET_PACKET_FORWARD_REQUEST;
+        ++i;
+        memcpy(packet + i, chain_keys + j * CRYPTO_PUBLIC_KEY_SIZE, CRYPTO_PUBLIC_KEY_SIZE);
+        i += CRYPTO_PUBLIC_KEY_SIZE;
+    }
+
+    memcpy(packet + i, data, data_length);
+    return true;
 }
 
 static uint16_t forwarding_packet_length(uint16_t sendback_data_len, uint16_t data_length)

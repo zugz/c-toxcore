@@ -50,11 +50,11 @@ static inline IP get_loopback(void)
     return ip;
 }
 
-#define NUM_FORWARDER 16
-#define NUM_FORWARDER_TCP 4
+#define NUM_FORWARDER 20
+#define NUM_FORWARDER_TCP 5
 #define NUM_FORWARDER_DHT (NUM_FORWARDER - NUM_FORWARDER_TCP)
 #define NUM_FORWARDING_ITERATIONS 1
-#define FORWARD_SEND_INTERVAL 1
+#define FORWARD_SEND_INTERVAL 2
 #define FORWARDER_TCP_RELAY_PORT 36570
 #define FORWARDING_BASE_PORT 36571
 
@@ -202,11 +202,32 @@ static void test_forwarding(void)
                     continue;
                 }
 
-                const uint32_t dest_i = NUM_FORWARDER_TCP + (random_u32() % NUM_FORWARDER_DHT);
-                const uint8_t *dest_pubkey = dht_get_self_public_key(dhts[dest_i]);
+                printf("%u", i + 1);
 
-                const uint32_t dht_forwarder_i = NUM_FORWARDER_TCP + (random_u32() % NUM_FORWARDER_DHT);
-                const IP_Port dht_forwarder = {ip, net_htons(FORWARDING_BASE_PORT + dht_forwarder_i)};
+                if (i < NUM_FORWARDER_TCP) {
+                    printf(" --> TCPRelay");
+                }
+
+                const uint16_t chain_length = i < NUM_FORWARDER_TCP ? i % 5 : i % 4 + 1;
+                uint8_t chain_keys[4 * CRYPTO_PUBLIC_KEY_SIZE];
+
+                uint32_t chain_i = NUM_FORWARDER_TCP + (random_u32() % NUM_FORWARDER_DHT);
+                const IP_Port first_ipp = {ip, net_htons(FORWARDING_BASE_PORT + chain_i)};
+
+                printf(" --> %u", chain_i + 1);
+
+                for (uint16_t j = 0; j < chain_length; ++j) {
+                    // pick random different dht node:
+                    chain_i += 1 + random_u32() % (NUM_FORWARDER_DHT - 1);
+                    chain_i = NUM_FORWARDER_TCP + (chain_i - NUM_FORWARDER_TCP) % NUM_FORWARDER_DHT;
+
+                    const uint8_t *dest_pubkey = dht_get_self_public_key(dhts[chain_i]);
+
+                    memcpy(chain_keys + j * CRYPTO_PUBLIC_KEY_SIZE, dest_pubkey, CRYPTO_PUBLIC_KEY_SIZE);
+                    printf(" --> %u", chain_i + 1);
+                }
+
+                printf("\n");
 
                 const uint16_t length = 12;
                 uint8_t data[12];
@@ -222,22 +243,13 @@ static void test_forwarding(void)
                         continue;
                     }
 
-                    if (i % 2) {
-                        if (send_tcp_double_forward_request(cs[i], tcp_forwarder, dht_forwarder, dest_pubkey, data, length) == 0) {
-                            printf("%u --> TCPRelay --> %u --> %u\n", i + 1, dht_forwarder_i + 1, dest_i + 1);
-                            test_data[i].sent = mono_time_get(mono_times[i]);
-                        }
-                    } else {
-                        const IP_Port dest = {ip, net_htons(FORWARDING_BASE_PORT + dest_i)};
-
-                        if (send_tcp_forward_request(cs[i], tcp_forwarder, dest, data, length) == 0) {
-                            printf("%u --> TCPRelay --> %u\n", i + 1, dest_i + 1);
-                            test_data[i].sent = mono_time_get(mono_times[i]);
-                        }
+                    if (send_tcp_forward_request(cs[i], tcp_forwarder, first_ipp,
+                                                 chain_keys, chain_length, data, length) == 0) {
+                        test_data[i].sent = mono_time_get(mono_times[i]);
                     }
                 } else {
-                    if (request_forwarding(nets[i], dht_forwarder, dest_pubkey, data, length)) {
-                        printf("%u --> %u --> %u\n", i + 1, dht_forwarder_i + 1, dest_i + 1);
+                    if (send_forward_request(nets[i], first_ipp,
+                                             chain_keys, chain_length, data, length)) {
                         test_data[i].sent = mono_time_get(mono_times[i]);
                     }
                 }

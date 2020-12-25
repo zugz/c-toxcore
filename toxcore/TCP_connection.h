@@ -111,24 +111,15 @@ int tcp_send_onion_request(TCP_Connections *tcp_c, unsigned int tcp_connections_
 int set_tcp_onion_status(TCP_Connections *tcp_c, bool status);
 
 /* Send a forward request to the TCP relay with IP_Port tcp_forwarder,
- * requesting to forward data to dest.
+ * requesting to forward data via a chain of dht nodes starting with dht_node.
+ * A chain_length of 0 means that dht_node is the final destination of data.
  *
  * return 0 on success.
  * return -1 on failure.
  */
-int tcp_send_forward_request(TCP_Connections *tcp_c, IP_Port tcp_forwarder, IP_Port dest,
-                             const uint8_t *data, uint16_t length);
-
-/* Send a forward request to the TCP relay with IP_Port tcp_forwarder,
- * requesting to forward data to dest via DHT node dht_forwarder.
- *
- * return 0 on success.
- * return -1 on failure.
- */
-int tcp_send_double_forward_request(TCP_Connections *tcp_c,
-                                    IP_Port tcp_forwarder, IP_Port dht_forwarder, const uint8_t *dest_public_key,
-                                    const uint8_t *data, uint16_t length);
-
+int tcp_send_forward_request(TCP_Connections *tcp_c, IP_Port tcp_forwarder, IP_Port dht_node,
+                             const uint8_t *chain_keys, uint16_t chain_length,
+                             const uint8_t *data, uint16_t data_length);
 
 /* Send an oob packet via the TCP relay corresponding to tcp_connections_number.
  *

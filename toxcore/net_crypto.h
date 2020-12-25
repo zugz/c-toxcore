@@ -287,23 +287,15 @@ bool get_random_tcp_conn_ip_port(Net_Crypto *c, IP_Port *ip_port);
 int send_tcp_onion_request(Net_Crypto *c, unsigned int tcp_connections_number, const uint8_t *data, uint16_t length);
 
 /* Send a forward request to the TCP relay with IP_Port tcp_forwarder,
- * requesting to forward data to dest.
+ * requesting to forward data via a chain of dht nodes starting with dht_node.
+ * A chain_length of 0 means that dht_node is the final destination of data.
  *
  * return 0 on success.
  * return -1 on failure.
  */
-int send_tcp_forward_request(Net_Crypto *c, IP_Port tcp_forwarder,
-                             IP_Port dest, const uint8_t *data, uint16_t length);
-
-/* Send a forward request to the TCP relay with IP_Port tcp_forwarder,
- * requesting to forward data to dest via DHT node dht_forwarder.
- *
- * return 0 on success.
- * return -1 on failure.
- */
-int send_tcp_double_forward_request(Net_Crypto *c,
-                                    IP_Port tcp_forwarder, IP_Port dht_forwarder, const uint8_t *dest_public_key,
-                                    const uint8_t *data, uint16_t length);
+int send_tcp_forward_request(Net_Crypto *c, IP_Port tcp_forwarder, IP_Port dht_node,
+                             const uint8_t *chain_keys, uint16_t chain_length,
+                             const uint8_t *data, uint16_t data_length);
 
 /* Copy a maximum of num TCP relays we are connected to to tcp_relays.
  * NOTE that the family of the copied ip ports will be set to TCP_INET or TCP_INET6.

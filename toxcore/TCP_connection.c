@@ -432,13 +432,15 @@ int tcp_send_onion_request(TCP_Connections *tcp_c, uint32_t tcp_connections_numb
 }
 
 /* Send a forward request to the TCP relay with IP_Port tcp_forwarder,
- * requesting to forward data to dest.
+ * requesting to forward data via a chain of dht nodes starting with dht_node.
+ * A chain_length of 0 means that dht_node is the final destination of data.
  *
  * return 0 on success.
  * return -1 on failure.
  */
-int tcp_send_forward_request(TCP_Connections *tcp_c, IP_Port tcp_forwarder,
-                             IP_Port dest, const uint8_t *data, uint16_t length)
+int tcp_send_forward_request(TCP_Connections *tcp_c, IP_Port tcp_forwarder, IP_Port dht_node,
+                             const uint8_t *chain_keys, uint16_t chain_length,
+                             const uint8_t *data, uint16_t data_length)
 {
     const int index = get_conn_number_by_ip_port(tcp_c, tcp_forwarder);
 
@@ -446,25 +448,15 @@ int tcp_send_forward_request(TCP_Connections *tcp_c, IP_Port tcp_forwarder,
         return -1;
     }
 
-    return (send_forward_request_tcp(tcp_c->tcp_connections[index].connection, dest, data, length) == 1 ? 0 : -1);
-}
+    if (chain_length == 0) {
+        return (send_forward_request_tcp(tcp_c->tcp_connections[index].connection, dht_node, data, data_length) == 1 ? 0 : -1);
+    }
 
-/* Send a forward request to the TCP relay with IP_Port tcp_forwarder,
- * requesting to forward data to dest via DHT node dht_forwarder.
- *
- * return 0 on success.
- * return -1 on failure.
- */
-int tcp_send_double_forward_request(TCP_Connections *tcp_c,
-                                    IP_Port tcp_forwarder, IP_Port dht_forwarder, const uint8_t *dest_public_key,
-                                    const uint8_t *data, uint16_t length)
-{
-    const uint16_t len = 1 + CRYPTO_PUBLIC_KEY_SIZE + length;
+    const uint16_t len = forward_chain_packet_size(chain_length, data_length);
     VLA(uint8_t, packet, len);
-    packet[0] = NET_PACKET_FORWARD_REQUEST;
-    memcpy(packet + 1, dest_public_key, CRYPTO_PUBLIC_KEY_SIZE);
-    memcpy(packet + 1 + CRYPTO_PUBLIC_KEY_SIZE, data, length);
-    return tcp_send_forward_request(tcp_c, tcp_forwarder, dht_forwarder, packet, len);
+
+    return (create_forward_chain_packet(chain_keys, chain_length, data, data_length, packet)
+            && send_forward_request_tcp(tcp_c->tcp_connections[index].connection, dht_node, packet, len) == 1 ? 0 : -1);
 }
 
 /* Send an oob packet via the TCP relay corresponding to tcp_connections_number.
