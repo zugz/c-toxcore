@@ -790,7 +790,8 @@ static uint8_t hardening_correct(const Hardening *h)
  */
 static void get_close_nodes_inner(const Mono_Time *mono_time, const uint8_t *public_key, Node_format *nodes_list,
                                   Family sa_family, const Client_data *client_list, uint32_t client_list_length,
-                                  uint32_t *num_nodes_ptr, bool is_LAN, uint8_t want_good)
+                                  uint32_t *num_nodes_ptr, bool is_LAN,
+                                  uint8_t want_good, uint8_t want_announce)
 {
     if (!net_family_is_ipv4(sa_family) && !net_family_is_ipv6(sa_family) && !net_family_is_unspec(sa_family)) {
         return;
@@ -833,11 +834,21 @@ static void get_close_nodes_inner(const Mono_Time *mono_time, const uint8_t *pub
             continue;
         }
 
+#ifdef CHECK_ANNOUNCE_NODE
+
+        if (want_announce && !client->announce_node) {
+            continue;
+        }
+
+#endif
+
         if (num_nodes < MAX_SENT_NODES) {
             memcpy(nodes_list[num_nodes].public_key, client->public_key, CRYPTO_PUBLIC_KEY_SIZE);
             nodes_list[num_nodes].ip_port = ipptp->ip_port;
             ++num_nodes;
         } else {
+            // TODO(zugz): this could be made significantly more efficient by
+            // using a version of add_to_list which works with a sorted list.
             add_to_list(nodes_list, MAX_SENT_NODES, client->public_key, ipptp->ip_port, public_key);
         }
     }
@@ -848,17 +859,15 @@ static void get_close_nodes_inner(const Mono_Time *mono_time, const uint8_t *pub
 /* Find MAX_SENT_NODES nodes closest to the public_key for the send nodes request:
  * put them in the nodes_list and return how many were found.
  *
- * TODO(irungentoo): For the love of based <your favorite deity, in doubt use
- * "love"> make this function cleaner and much more efficient.
- *
- * want_good : do we want only good nodes as checked with the hardening returned or not?
+ * want_good: return only good nodes as checked with the hardening? Currently ignored!
+ * want_announce: return only nodes which implement the dht announcements protocol.
  */
 static int get_somewhat_close_nodes(const DHT *dht, const uint8_t *public_key, Node_format *nodes_list,
-                                    Family sa_family, bool is_LAN, uint8_t want_good)
+                                    Family sa_family, bool is_LAN, uint8_t want_good, uint8_t want_announce)
 {
     uint32_t num_nodes = 0;
     get_close_nodes_inner(dht->mono_time, public_key, nodes_list, sa_family,
-                          dht->close_clientlist, LCLIENT_LIST, &num_nodes, is_LAN, 0);
+                          dht->close_clientlist, LCLIENT_LIST, &num_nodes, is_LAN, 0, want_announce);
 
     /* TODO(irungentoo): uncomment this when hardening is added to close friend clients */
 #if 0
@@ -874,17 +883,18 @@ static int get_somewhat_close_nodes(const DHT *dht, const uint8_t *public_key, N
     for (uint32_t i = 0; i < dht->num_friends; ++i) {
         get_close_nodes_inner(dht->mono_time, public_key, nodes_list, sa_family,
                               dht->friends_list[i].client_list, MAX_FRIEND_CLIENTS,
-                              &num_nodes, is_LAN, 0);
+                              &num_nodes, is_LAN, 0, want_announce);
     }
 
     return num_nodes;
 }
 
 int get_close_nodes(const DHT *dht, const uint8_t *public_key, Node_format *nodes_list, Family sa_family,
-                    bool is_LAN, uint8_t want_good)
+                    bool is_LAN, uint8_t want_good, uint8_t want_announce)
 {
     memset(nodes_list, 0, MAX_SENT_NODES * sizeof(Node_format));
-    return get_somewhat_close_nodes(dht, public_key, nodes_list, sa_family, is_LAN, want_good);
+    return get_somewhat_close_nodes(dht, public_key, nodes_list, sa_family,
+                                    is_LAN, want_good, want_announce);
 }
 
 typedef struct DHT_Cmp_data {
@@ -1085,6 +1095,23 @@ bool node_addable_to_close_list(DHT *dht, const uint8_t *public_key, IP_Port ip_
 {
     return add_to_close(dht, public_key, ip_port, 1) == 0;
 }
+
+#ifdef CHECK_ANNOUNCE_NODE
+/* Set node as announce node.
+ */
+void set_announce_node(DHT *dht, const uint8_t *public_key)
+{
+    for (int32_t i = -1; i < dht->num_friends; ++i) {
+        Client_data *list = i == -1 ? dht->close_clientlist : dht->friends_list[i].client_list;
+        const uint32_t list_len = i == -1 ? LCLIENT_LIST : MAX_FRIEND_CLIENTS;
+        const uint32_t index = index_of_client_pk(list, list_len, public_key);
+
+        if (index != UINT32_MAX) {
+            list[index].announce_node = true;
+        }
+    }
+}
+#endif
 
 static bool is_pk_in_client_list(const Client_data *list, unsigned int client_list_length, const Mono_Time *mono_time,
                                  const uint8_t *public_key, IP_Port ip_port)
@@ -1359,7 +1386,7 @@ static int sendnodes_ipv6(const DHT *dht, IP_Port ip_port, const uint8_t *public
 
     Node_format nodes_list[MAX_SENT_NODES];
     const uint32_t num_nodes =
-        get_close_nodes(dht, client_id, nodes_list, net_family_unspec, ip_is_lan(ip_port.ip), 1);
+        get_close_nodes(dht, client_id, nodes_list, net_family_unspec, ip_is_lan(ip_port.ip), 1, 0);
 
     VLA(uint8_t, plain, 1 + node_format_size * MAX_SENT_NODES + length);
 
@@ -1605,7 +1632,7 @@ int dht_addfriend(DHT *dht, const uint8_t *public_key, dht_ip_cb *ip_callback,
     }
 
     dht_friend->num_to_bootstrap = get_close_nodes(dht, dht_friend->public_key, dht_friend->to_bootstrap, net_family_unspec,
-                                   1, 0);
+                                   1, 0, 0);
 
     return 0;
 }
@@ -2498,7 +2525,7 @@ static Node_format random_node(DHT *dht, Family sa_family)
 
     Node_format nodes_list[MAX_SENT_NODES];
     memset(nodes_list, 0, sizeof(nodes_list));
-    const uint32_t num_nodes = get_close_nodes(dht, id, nodes_list, sa_family, 1, 0);
+    const uint32_t num_nodes = get_close_nodes(dht, id, nodes_list, sa_family, 1, 0, 0);
 
     if (num_nodes == 0) {
         return nodes_list[0];

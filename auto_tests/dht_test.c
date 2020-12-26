@@ -547,7 +547,7 @@ static void test_list_main(void)
                 ck_assert_msg(count == 1, "Nodes in search don't know ip of friend. %u %u %u", i, j, count);
 
                 Node_format ln[MAX_SENT_NODES];
-                uint16_t n = get_close_nodes(dhts[(l + j) % NUM_DHT], dhts[l]->self_public_key, ln, net_family_unspec, 1, 0);
+                uint16_t n = get_close_nodes(dhts[(l + j) % NUM_DHT], dhts[l]->self_public_key, ln, net_family_unspec, 1, 0, 0);
                 ck_assert_msg(n == MAX_SENT_NODES, "bad num close %u | %u %u", n, i, j);
 
                 count = 0;

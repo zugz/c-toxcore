@@ -55,6 +55,10 @@
 #define CRYPTO_PACKET_DHTPK         156
 #define CRYPTO_PACKET_NAT_PING      254 // NAT ping crypto packet ID.
 
+/* This define can eventually be removed; it is necessary if a significant
+ * proportion of dht nodes do not implement the dht announcements protocol. */
+#define CHECK_ANNOUNCE_NODE
+
 /* Create a request to peer.
  * send_public_key and send_secret_key are the pub/secret keys of the sender.
  * recv_public_key is public key of receiver.
@@ -113,6 +117,11 @@ typedef struct Client_data {
     uint8_t     public_key[CRYPTO_PUBLIC_KEY_SIZE];
     IPPTsPng    assoc4;
     IPPTsPng    assoc6;
+
+#ifdef CHECK_ANNOUNCE_NODE
+    /* Responded to data search? */
+    bool        announce_node;
+#endif
 } Client_data;
 
 /*----------------------------------------------------------------------------------*/
@@ -297,6 +306,12 @@ bool add_to_list(Node_format *nodes_list, uint32_t length, const uint8_t *pk, IP
  */
 bool node_addable_to_close_list(DHT *dht, const uint8_t *public_key, IP_Port ip_port);
 
+#ifdef CHECK_ANNOUNCE_NODE
+/* Set node as announce node.
+ */
+void set_announce_node(DHT *dht, const uint8_t *public_key);
+#endif
+
 /* Get the (maximum MAX_SENT_NODES) closest nodes to public_key we know
  * and put them in nodes_list (must be MAX_SENT_NODES big).
  *
@@ -308,7 +323,7 @@ bool node_addable_to_close_list(DHT *dht, const uint8_t *public_key, IP_Port ip_
  *
  */
 int get_close_nodes(const DHT *dht, const uint8_t *public_key, Node_format *nodes_list, Family sa_family,
-                    bool is_LAN, uint8_t want_good);
+                    bool is_LAN, uint8_t want_good, uint8_t want_announce);
 
 
 /* Put up to max_num nodes in nodes from the random friends.
