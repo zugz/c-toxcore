@@ -202,9 +202,9 @@ int id_closest(const uint8_t *pk, const uint8_t *pk1, const uint8_t *pk2)
     return 0;
 }
 
-/* Return index of first unequal bit number.
+/* Return index of first unequal bit number between public keys pk1 and pk2.
  */
-static unsigned int bit_by_bit_cmp(const uint8_t *pk1, const uint8_t *pk2)
+unsigned int bit_by_bit_cmp(const uint8_t *pk1, const uint8_t *pk2)
 {
     unsigned int i;
     unsigned int j = 0;

@@ -224,7 +224,9 @@ set(toxcore_SOURCES ${toxcore_SOURCES}
   toxcore/onion_client.c
   toxcore/onion_client.h
   toxcore/forwarding.c
-  toxcore/forwarding.h)
+  toxcore/forwarding.h
+  toxcore/announce.c
+  toxcore/announce.h)
 
 # LAYER 5: Friend requests and connections
 # ----------------------------------------
@@ -418,6 +420,7 @@ function(auto_test target)
 endfunction()
 
 auto_test(TCP)
+auto_test(announce)
 auto_test(conference)
 auto_test(conference_double_invite)
 auto_test(conference_invite_merge)

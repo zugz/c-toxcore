@@ -45,6 +45,11 @@ struct Forwarding {
     void *forwarded_response_callback_object;
 };
 
+DHT *forwarding_get_dht(Forwarding *forwarding)
+{
+    return forwarding->dht;
+}
+
 #define SENDBACK_TIMEOUT 3600
 
 bool send_forward_request(Networking_Core *net, IP_Port forwarder,

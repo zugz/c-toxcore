@@ -35,6 +35,8 @@
 
 typedef struct Forwarding Forwarding;
 
+DHT *forwarding_get_dht(Forwarding *forwarding);
+
 /* Send data to forwarder for forwarding via chain of dht nodes.
  * Destination is last key in the chain.
  * Maximum data_length is MAX_FORWARD_DATA_SIZE.
