@@ -1007,11 +1007,6 @@ static int handle_TCP_packet(TCP_Server *tcp_server, uint32_t con_id, const uint
                 return -1;
             }
 
-            if (dest.port < 1024) {
-                /* Reject forward request to reserved port */
-                return -1;
-            }
-
             const uint8_t *const forward_data = data + (1 + ipport_length);
             const uint16_t forward_data_len = length - (1 + ipport_length);
 
