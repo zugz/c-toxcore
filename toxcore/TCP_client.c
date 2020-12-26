@@ -68,8 +68,8 @@ struct TCP_Client_Connection {
     tcp_onion_response_cb *onion_callback;
     void *onion_callback_object;
 
-    tcp_client_forwarding_cb *forwarding_callback;
-    void *forwarding_callback_object;
+    forwarded_response_cb *forwarded_response_callback;
+    void *forwarded_response_callback_object;
 
     /* Can be used by user. */
     void *custom_object;
@@ -685,10 +685,10 @@ int send_forward_request_tcp(TCP_Client_Connection *con, IP_Port dest, const uin
     return write_packet_TCP_client_secure_connection(con, packet, 1 + ipport_length + length, 0);
 }
 
-void forwarding_handler(TCP_Client_Connection *con, tcp_client_forwarding_cb *forwarding_callback, void *object)
+void forwarding_handler(TCP_Client_Connection *con, forwarded_response_cb *forwarded_response_callback, void *object)
 {
-    con->forwarding_callback = forwarding_callback;
-    con->forwarding_callback_object = object;
+    con->forwarded_response_callback = forwarded_response_callback;
+    con->forwarded_response_callback_object = object;
 }
 
 /* Create new TCP connection to ip_port/public_key
@@ -915,7 +915,7 @@ static int handle_TCP_client_packet(TCP_Client_Connection *conn, const uint8_t *
         }
 
         case TCP_PACKET_FORWARDING: {
-            conn->forwarding_callback(conn->forwarding_callback_object, data + 1, length - 1, conn->ip_port, userdata);
+            conn->forwarded_response_callback(conn->forwarded_response_callback_object, data + 1, length - 1, userdata);
             return 0;
         }
 

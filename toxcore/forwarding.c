@@ -38,8 +38,11 @@ struct Forwarding {
     forward_reply_cb *forward_reply_cb;
     void *forward_reply_callback_object;
 
-    forwarded_cb *forwarded_cb;
-    void *forwarded_callback_object;
+    forwarded_request_cb *forwarded_request_cb;
+    void *forwarded_request_callback_object;
+
+    forwarded_response_cb *forwarded_response_cb;
+    void *forwarded_response_callback_object;
 };
 
 #define SENDBACK_TIMEOUT 3600
@@ -279,13 +282,24 @@ static int handle_forwarding(void *object, IP_Port source, const uint8_t *packet
                                            forwarded_len) ? 0 : 1);
     }
 
-    if (!forwarding->forwarded_cb) {
-        return 1;
-    }
+    if (sendback_len > 0) {
+        if (!forwarding->forwarded_request_cb) {
+            return 1;
+        }
 
-    forwarding->forwarded_cb(forwarding->forwarded_callback_object, source, sendback, sendback_len, forwarded,
-                             forwarded_len, userdata);
-    return 0;
+        forwarding->forwarded_request_cb(forwarding->forwarded_request_callback_object,
+                                         source, sendback, sendback_len,
+                                         forwarded, forwarded_len, userdata);
+        return 0;
+    } else {
+        if (!forwarding->forwarded_response_cb) {
+            return 1;
+        }
+
+        forwarding->forwarded_response_cb(forwarding->forwarded_response_callback_object,
+                                          forwarded, forwarded_len, userdata);
+        return 0;
+    }
 }
 
 bool forward_reply(Networking_Core *net, IP_Port forwarder,
@@ -305,10 +319,16 @@ bool forward_reply(Networking_Core *net, IP_Port forwarder,
     return (sendpacket(net, forwarder, packet, len) == len);
 }
 
-void set_callback_forwarded(Forwarding *forwarding, forwarded_cb *function, void *object)
+void set_callback_forwarded_request(Forwarding *forwarding, forwarded_request_cb *function, void *object)
 {
-    forwarding->forwarded_cb = function;
-    forwarding->forwarded_callback_object = object;
+    forwarding->forwarded_request_cb = function;
+    forwarding->forwarded_request_callback_object = object;
+}
+
+void set_callback_forwarded_response(Forwarding *forwarding, forwarded_response_cb *function, void *object)
+{
+    forwarding->forwarded_response_cb = function;
+    forwarding->forwarded_response_callback_object = object;
 }
 
 void set_callback_forward_reply(Forwarding *forwarding, forward_reply_cb *function, void *object)

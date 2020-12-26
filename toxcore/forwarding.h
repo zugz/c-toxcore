@@ -72,16 +72,20 @@ bool forward_reply(Networking_Core *net, IP_Port forwarder,
                    const uint8_t *data, uint16_t length);
 
 
-/* Set callback to handle a forwarded packet.
+/* Set callback to handle a forwarded request.
  *
  * To reply to the packet, callback should use forward_reply() to send a reply
  * forwarded via forwarder, passing the provided sendback.
  */
-typedef void forwarded_cb(void *object, IP_Port forwarder, const uint8_t *sendback,
-                          uint16_t sendback_length, const uint8_t *data,
-                          uint16_t length, void *userdata);
-void set_callback_forwarded(Forwarding *forwarding, forwarded_cb *function, void *object);
+typedef void forwarded_request_cb(void *object, IP_Port forwarder, const uint8_t *sendback,
+                                  uint16_t sendback_length, const uint8_t *data,
+                                  uint16_t length, void *userdata);
+void set_callback_forwarded_request(Forwarding *forwarding, forwarded_request_cb *function, void *object);
 
+/* Set callback to handle a forwarded response.
+ */
+typedef void forwarded_response_cb(void *object, const uint8_t *data, uint16_t length, void *userdata);
+void set_callback_forwarded_response(Forwarding *forwarding, forwarded_response_cb *function, void *object);
 
 /* Send forwarding packet to dest with given sendback data and data.
  */

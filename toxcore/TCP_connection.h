@@ -141,11 +141,10 @@ typedef int tcp_onion_cb(void *object, const uint8_t *data, uint16_t length, voi
  */
 void set_onion_packet_tcp_connection_callback(TCP_Connections *tcp_c, tcp_onion_cb *tcp_onion_callback, void *object);
 
-typedef void tcp_forwarding_cb(void *object, IP_Port forwarder, const uint8_t *data, uint16_t length, void *userdata);
-
 /* Set the callback for TCP forwarding packets.
  */
-void set_forwarding_packet_tcp_connection_callback(TCP_Connections *tcp_c, tcp_forwarding_cb *tcp_forwarding_callback,
+void set_forwarding_packet_tcp_connection_callback(TCP_Connections *tcp_c,
+        forwarded_response_cb *tcp_forwarded_response_callback,
         void *object);
 
 

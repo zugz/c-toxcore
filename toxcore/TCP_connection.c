@@ -42,8 +42,8 @@ struct TCP_Connections {
     tcp_onion_cb *tcp_onion_callback;
     void *tcp_onion_callback_object;
 
-    tcp_forwarding_cb *tcp_forwarding_callback;
-    void *tcp_forwarding_callback_object;
+    forwarded_response_cb *tcp_forwarded_response_callback;
+    void *tcp_forwarded_response_callback_object;
 
     TCP_Proxy_Info proxy_info;
 
@@ -512,11 +512,12 @@ void set_onion_packet_tcp_connection_callback(TCP_Connections *tcp_c, tcp_onion_
 
 /* Set the callback for TCP forwarding packets.
  */
-void set_forwarding_packet_tcp_connection_callback(TCP_Connections *tcp_c, tcp_forwarding_cb *tcp_forwarding_callback,
+void set_forwarding_packet_tcp_connection_callback(TCP_Connections *tcp_c,
+        forwarded_response_cb *tcp_forwarded_response_callback,
         void *object)
 {
-    tcp_c->tcp_forwarding_callback = tcp_forwarding_callback;
-    tcp_c->tcp_forwarding_callback_object = object;
+    tcp_c->tcp_forwarded_response_callback = tcp_forwarded_response_callback;
+    tcp_c->tcp_forwarded_response_callback_object = object;
 }
 
 /* Encode tcp_connections_number as a custom ip_port.
@@ -1150,16 +1151,13 @@ static int tcp_onion_callback(void *object, const uint8_t *data, uint16_t length
     return 0;
 }
 
-static int tcp_forwarding_callback(void *object, const uint8_t *data, uint16_t length, IP_Port forwarder,
-                                   void *userdata)
+static void tcp_forwarding_callback(void *object, const uint8_t *data, uint16_t length, void *userdata)
 {
     TCP_Connections *tcp_c = (TCP_Connections *)object;
 
-    if (tcp_c->tcp_forwarding_callback) {
-        tcp_c->tcp_forwarding_callback(tcp_c->tcp_forwarding_callback_object, forwarder, data, length, userdata);
+    if (tcp_c->tcp_forwarded_response_callback) {
+        tcp_c->tcp_forwarded_response_callback(tcp_c->tcp_forwarded_response_callback_object, data, length, userdata);
     }
-
-    return 0;
 }
 
 /* Set callbacks for the TCP relay connection.

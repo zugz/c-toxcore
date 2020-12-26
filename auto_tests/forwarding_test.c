@@ -65,39 +65,39 @@ typedef struct Test_Data {
     bool returned;
 } Test_Data;
 
-static void test_forwarded_cb(void *object, IP_Port forwarder,
-                              const uint8_t *sendback, uint16_t sendback_length,
-                              const uint8_t *data, uint16_t length, void *userdata)
+static void test_forwarded_request_cb(void *object, IP_Port forwarder,
+                                      const uint8_t *sendback, uint16_t sendback_length,
+                                      const uint8_t *data, uint16_t length, void *userdata)
 {
     Test_Data *test_data = (Test_Data *)object;
     uint8_t *index = (uint8_t *)userdata;
 
-    if (length == 12 && memcmp("hello:  ", data, 8) == 0) {
-        uint8_t reply[12];
-        memcpy(reply, "reply:  ", 8);
-        memcpy(reply + 8, data + 8, 4);
-        ck_assert_msg(forward_reply(test_data->net, forwarder, sendback, sendback_length, reply, 12),
-                      "[%u] forward_reply failed", *index);
+    if (length != 12 || memcmp("hello:  ", data, 8) != 0) {
+        printf("[%u] got unexpected data of length %d\n", *index, length);
         return;
     }
 
-    if (length == 12 && memcmp("reply:  ", data, 8) == 0) {
-        ck_assert_msg(sendback_length == 0, "sendback of positive length %d in reply", sendback_length);
-
-        if (memcmp(&test_data->send_back, data + 8, 4) == 0) {
-            test_data->returned = true;
-        }
-
-        return;
-    }
-
-    printf("[%u] got unexpected data of length %d\n", *index, length);
+    uint8_t reply[12];
+    memcpy(reply, "reply:  ", 8);
+    memcpy(reply + 8, data + 8, 4);
+    ck_assert_msg(forward_reply(test_data->net, forwarder, sendback, sendback_length, reply, 12),
+                  "[%u] forward_reply failed", *index);
 }
 
-static void test_tcp_forwarded_cb(void *object, IP_Port forwarder,
-                                  const uint8_t *data, uint16_t length, void *userdata)
+static void test_forwarded_response_cb(void *object,
+                                       const uint8_t *data, uint16_t length, void *userdata)
 {
-    test_forwarded_cb(object, forwarder, nullptr, 0, data, length, userdata);
+    Test_Data *test_data = (Test_Data *)object;
+    uint8_t *index = (uint8_t *)userdata;
+
+    if (length != 12 || memcmp("reply:  ", data, 8) != 0) {
+        printf("[%u] got unexpected data of length %d\n", *index, length);
+        return;
+    }
+
+    if (memcmp(&test_data->send_back, data + 8, 4) == 0) {
+        test_data->returned = true;
+    }
 }
 
 static bool all_returned(Test_Data *test_data)
@@ -149,8 +149,9 @@ static void test_forwarding(void)
         test_data[i].send_back = 0;
         test_data[i].sent = 0;
         test_data[i].returned = false;
-        set_callback_forwarded(forwardings[i], test_forwarded_cb, &test_data[i]);
-        set_forwarding_packet_tcp_connection_callback(nc_get_tcp_c(cs[i]), test_tcp_forwarded_cb, &test_data[i]);
+        set_callback_forwarded_request(forwardings[i], test_forwarded_request_cb, &test_data[i]);
+        set_callback_forwarded_response(forwardings[i], test_forwarded_response_cb, &test_data[i]);
+        set_forwarding_packet_tcp_connection_callback(nc_get_tcp_c(cs[i]), test_forwarded_response_cb, &test_data[i]);
     }
 
     printf("testing forwarding via tcp relays and dht\n");
