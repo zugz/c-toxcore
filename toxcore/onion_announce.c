@@ -415,6 +415,7 @@ static int handle_announce_request(void *object, IP_Port source, const uint8_t *
     int nodes_length = 0;
 
     if (num_nodes != 0) {
+        // FIXME(zugz): wrong max length! Should be 204.
         nodes_length = pack_nodes(pl + 1 + ONION_PING_ID_SIZE, sizeof(nodes_list), nodes_list, num_nodes);
 
         if (nodes_length <= 0) {
