@@ -156,13 +156,23 @@ const Client_data *dht_friend_client(const DHT_Friend *dht_friend, size_t index)
  */
 int packed_node_size(Family ip_family);
 
-/* Packs an IP_Port structure into data of max size length.
+/* Pack an IP_Port structure into data of max size length.
  *
- * Returns size of packed IP_Port data on success
+ * Return size of packed IP_Port data on success.
  * Return -1 on failure.
  */
 int pack_ip_port(uint8_t *data, uint16_t length, const IP_Port *ip_port);
 
+/* Encrypt plain and write resulting DHT packet into packet with max size
+ * length.
+ *
+ * Return size of packet on success.
+ * Return -1 on failure.
+ */
+int dht_create_packet(const uint8_t public_key[CRYPTO_PUBLIC_KEY_SIZE],
+                      const uint8_t *shared_key, const uint8_t type,
+                      const uint8_t *plain, size_t plain_length,
+                      uint8_t *packet, size_t length);
 /* Unpack IP_Port structure from data of max size length into ip_port.
  *
  * Return size of unpacked ip_port on success.

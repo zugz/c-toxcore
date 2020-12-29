@@ -706,7 +706,7 @@ static void test_dht_create_packet(void)
     uint8_t key[CRYPTO_SYMMETRIC_KEY_SIZE];
     new_symmetric_key(key);
 
-    uint16_t length = dht_create_packet(key, key, NET_PACKET_GET_NODES, plain, sizeof(plain), pkt);
+    uint16_t length = dht_create_packet(key, key, NET_PACKET_GET_NODES, plain, sizeof(plain), pkt, sizeof(pkt));
 
     ck_assert_msg(pkt[0] == NET_PACKET_GET_NODES, "Malformed packet.");
     ck_assert_msg(memcmp(pkt + 1, key, CRYPTO_SYMMETRIC_KEY_SIZE) == 0, "Malformed packet.");
