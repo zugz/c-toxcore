@@ -2772,6 +2772,8 @@ void kill_dht(DHT *dht)
     networking_registerhandler(dht->net, NET_PACKET_SEND_NODES_IPV6, nullptr, nullptr);
     cryptopacket_registerhandler(dht, CRYPTO_PACKET_NAT_PING, nullptr, nullptr);
     cryptopacket_registerhandler(dht, CRYPTO_PACKET_HARDENING, nullptr, nullptr);
+    crypto_memzero(&dht->shared_keys_recv, sizeof(Shared_Keys));
+    crypto_memzero(&dht->shared_keys_sent, sizeof(Shared_Keys));
     ping_array_kill(dht->dht_ping_array);
     ping_array_kill(dht->dht_harden_ping_array);
     ping_kill(dht->ping);
