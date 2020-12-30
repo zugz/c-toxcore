@@ -226,7 +226,13 @@ set(toxcore_SOURCES ${toxcore_SOURCES}
   toxcore/forwarding.c
   toxcore/forwarding.h
   toxcore/announce.c
-  toxcore/announce.h)
+  toxcore/announce.h
+  toxcore/announce_client.h
+  toxcore/announce_client.c
+  toxcore/announce_common.h
+  toxcore/announce_common.c
+  toxcore/announce_lookups.c
+  toxcore/announce_lookups.h)
 
 # LAYER 5: Friend requests and connections
 # ----------------------------------------
@@ -421,6 +427,8 @@ endfunction()
 
 auto_test(TCP)
 auto_test(announce)
+auto_test(announce_client)
+auto_test(announce_lookups)
 auto_test(conference)
 auto_test(conference_double_invite)
 auto_test(conference_invite_merge)

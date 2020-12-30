@@ -4,8 +4,10 @@
 
 /* "Server side" of the DHT announcements protocol. */
 
-#include "LAN_discovery.h"
 #include "announce.h"
+
+#include "LAN_discovery.h"
+#include "announce_common.h"
 #include "timed_auth.h"
 #include "util.h"
 
@@ -14,8 +16,6 @@
 #include <string.h>
 
 #define MAX_ANNOUNCEMENT_TIMEOUT 900
-
-#define MAX_ANNOUNCEMENT_SIZE 512
 
 typedef struct Announce_Entry {
     uint64_t store_until;
@@ -203,7 +203,9 @@ static int create_data_search_to_auth(const uint8_t *data_public_key, const uint
         return -1;
     }
 
-    memcpy(dest + CRYPTO_PUBLIC_KEY_SIZE * 2 + ipport_length, sendback, sendback_length);
+    if (sendback_length > 0) {
+        memcpy(dest + CRYPTO_PUBLIC_KEY_SIZE * 2 + ipport_length, sendback, sendback_length);
+    }
 
     return CRYPTO_PUBLIC_KEY_SIZE * 2 + ipport_length + sendback_length;
 }
@@ -464,10 +466,7 @@ static int create_reply(Announcements *announce, IP_Port source,
 
     const uint16_t plain_reply_len = plain_reply_noping_len + sizeof(uint64_t);
 
-    const uint8_t response_type =
-        data[0] == NET_PACKET_DATA_SEARCH_REQUEST ? NET_PACKET_DATA_SEARCH_RESPONSE :
-        data[0] == NET_PACKET_DATA_RETRIEVE_REQUEST ? NET_PACKET_DATA_RETRIEVE_RESPONSE :
-        NET_PACKET_STORE_ANNOUNCE_RESPONSE;
+    const uint8_t response_type = response_of_request_type(data[0]);
 
     return dht_create_packet(announce->public_key, shared_key, response_type,
                              plain_reply, plain_reply_len, reply, reply_max_length);
@@ -504,10 +503,10 @@ static int handle_announce_request(void *object, IP_Port source,
                                  data, length, reply, sizeof(reply));
 
     if (len == -1) {
-        return 1;
+        return -1;
     }
 
-    return sendpacket(announce->net, source, data, len);
+    return sendpacket(announce->net, source, reply, len) == len ? 0 : -1;
 }
 
 Announcements *new_announcements(Mono_Time *mono_time, Forwarding *forwarding)

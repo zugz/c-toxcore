@@ -20,7 +20,7 @@ typedef struct State {
 
 #include "run_auto_test.h"
 
-static void basic_announce_tests()
+static void test_bucketnum(void)
 {
     uint8_t key1[CRYPTO_PUBLIC_KEY_SIZE], key2[CRYPTO_PUBLIC_KEY_SIZE];
     random_bytes(key1, sizeof(key1));
@@ -41,7 +41,10 @@ static void basic_announce_tests()
     key2[31] ^= 0x09;
 
     ck_assert_msg(get_bucketnum(key1, key2) == 4, "Bad bucketnum");
+}
 
+static void test_store_data(void)
+{
     Logger *log = logger_new();
     logger_callback_log(log, (logger_cb *)print_debug_log, nullptr, nullptr);
     Mono_Time *mono_time = mono_time_new();
@@ -53,13 +56,16 @@ static void basic_announce_tests()
     uint8_t data[MAX_ANNOUNCEMENT_SIZE];
     random_bytes(data, sizeof(data));
 
-    Announce_Entry *stored = get_stored(announce, key1);
+    uint8_t key[CRYPTO_PUBLIC_KEY_SIZE], key2[CRYPTO_PUBLIC_KEY_SIZE];
+    random_bytes(key, sizeof(key));
+
+    Announce_Entry *stored = get_stored(announce, key);
     ck_assert_msg(stored == nullptr, "Unstored announcement exists");
 
-    ck_assert_msg(store_data(announce, key1, data, sizeof(data),
+    ck_assert_msg(store_data(announce, key, data, sizeof(data),
                              MAX_ANNOUNCEMENT_TIMEOUT), "Failed to store announcement");
 
-    stored = get_stored(announce, key1);
+    stored = get_stored(announce, key);
     ck_assert_msg(stored, "Failed to get stored announcement");
 
     ck_assert_msg(stored->length == sizeof(data), "Bad stored announcement length");
@@ -89,17 +95,17 @@ static void basic_announce_tests()
     logger_kill(log);
 }
 
-static void announce_test(Tox **toxes, State *state)
+static void basic_announce_tests(void)
 {
-    // Nothing to do here. When copying this test, add test-specific code here.
+    test_bucketnum();
+    test_store_data();
 }
+
 
 int main(void)
 {
     setvbuf(stdout, nullptr, _IONBF, 0);
 
     basic_announce_tests();
-
-    run_auto_test(2, announce_test, false);
     return 0;
 }

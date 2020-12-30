@@ -621,7 +621,7 @@ int unpack_nodes(Node_format *nodes, uint16_t max_num_nodes, uint16_t *processed
         assert(increment == PACKED_NODE_SIZE_IP4 || increment == PACKED_NODE_SIZE_IP6);
     }
 
-    if (processed_data_len) {
+    if (processed_data_len != nullptr) {
         *processed_data_len = len_processed;
     }
 

@@ -57,7 +57,8 @@
 
 /* This define can eventually be removed; it is necessary if a significant
  * proportion of dht nodes do not implement the dht announcements protocol. */
-#define CHECK_ANNOUNCE_NODE
+// FIXME: Disabled during testing
+//#define CHECK_ANNOUNCE_NODE
 
 /* Create a request to peer.
  * send_public_key and send_secret_key are the pub/secret keys of the sender.
