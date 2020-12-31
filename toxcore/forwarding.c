@@ -72,7 +72,7 @@ bool create_forward_chain_packet(const uint8_t *chain_keys, uint16_t chain_lengt
                                  const uint8_t *data, uint16_t data_length,
                                  uint8_t *packet)
 {
-    if (chain_length == 0 || chain_length > MAX_FORWARD_CHAIN_SIZE
+    if (chain_length == 0 || chain_length > MAX_FORWARD_CHAIN_LENGTH
             || data_length > MAX_FORWARD_DATA_SIZE) {
         return false;
     }

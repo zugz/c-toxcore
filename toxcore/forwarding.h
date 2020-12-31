@@ -29,7 +29,7 @@
 #define MAX_SENDBACK_SIZE (0xff - 1)
 #define MAX_FORWARD_DATA_SIZE (MAX_UDP_PACKET_SIZE - (1 + 1 + MAX_SENDBACK_SIZE))
 
-#define MAX_FORWARD_CHAIN_SIZE 4
+#define MAX_FORWARD_CHAIN_LENGTH 4
 
 #define MAX_PACKED_IPPORT_SIZE (1 + SIZE_IP6 + sizeof(uint16_t))
 
@@ -40,7 +40,7 @@ DHT *forwarding_get_dht(Forwarding *forwarding);
 /* Send data to forwarder for forwarding via chain of dht nodes.
  * Destination is last key in the chain.
  * Maximum data_length is MAX_FORWARD_DATA_SIZE.
- * Maximum chain_length MAX_FORWARD_CHAIN_SIZE, minimum 1.
+ * Maximum chain_length MAX_FORWARD_CHAIN_LENGTH, minimum 1.
  *
  * return true on success, false otherwise.
  */
@@ -55,7 +55,7 @@ uint16_t forward_chain_packet_size(uint16_t chain_length, uint16_t data_length);
 /* Create forward request packet for forwarding data via chain of dht nodes.
  * Destination is last key in the chain.
  * Maximum data_length is MAX_FORWARD_DATA_SIZE.
- * Maximum chain length MAX_FORWARD_CHAIN_SIZE, minimum 1.
+ * Maximum chain length MAX_FORWARD_CHAIN_LENGTH, minimum 1.
  * Writes forward_chain_packet_size(chain_length, data_length) bytes to packet.
  *
  * return true on success, false otherwise.
