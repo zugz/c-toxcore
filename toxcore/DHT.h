@@ -397,6 +397,11 @@ int route_packet(const DHT *dht, const uint8_t *public_key, const uint8_t *packe
  */
 int route_tofriend(const DHT *dht, const uint8_t *friend_id, const uint8_t *packet, uint16_t length);
 
+/* Write to node a random node from all the nodes we are connected to.
+ * Return true if some node is found and written, false otherwise.
+ */
+bool random_node(DHT *dht, Node_format *node, Family sa_family, bool want_announce);
+
 /* Function to handle crypto packets.
  */
 void cryptopacket_registerhandler(DHT *dht, uint8_t byte, cryptopacket_handler_cb *cb, void *object);

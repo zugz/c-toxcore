@@ -2520,13 +2520,11 @@ static int handle_hardening(void *object, IP_Port source, const uint8_t *source_
     return 1;
 }
 
-#if DHT_HARDENING
-#define HARDEN_TIMEOUT 1200
-
-/* Return a random node from all the nodes we are connected to.
+/* Write to node a random node from all the nodes we are connected to.
+ * Return true if some node is found and written, false otherwise.
  * TODO(irungentoo): improve this function.
  */
-static Node_format random_node(DHT *dht, Family sa_family)
+bool random_node(DHT *dht, Node_format *node, Family sa_family, bool want_announce)
 {
     uint8_t id[CRYPTO_PUBLIC_KEY_SIZE];
 
@@ -2536,16 +2534,15 @@ static Node_format random_node(DHT *dht, Family sa_family)
     }
 
     Node_format nodes_list[MAX_SENT_NODES];
-    memset(nodes_list, 0, sizeof(nodes_list));
-    const uint32_t num_nodes = get_close_nodes(dht, id, nodes_list, sa_family, 1, 0, 0);
+    const uint32_t num_nodes = get_close_nodes(dht, id, nodes_list, sa_family, 1, 0, want_announce);
 
     if (num_nodes == 0) {
-        return nodes_list[0];
+        return false;
     }
 
-    return nodes_list[random_u32() % num_nodes];
+    *node = nodes_list[random_u32() % num_nodes];
+    return true;
 }
-#endif
 
 /* Put up to max_num nodes in nodes from the closelist.
  *
@@ -2624,6 +2621,7 @@ uint16_t closelist_nodes(DHT *dht, Node_format *nodes, uint16_t max_num)
 }
 
 #if DHT_HARDENING
+#define HARDEN_TIMEOUT 1200
 static void do_hardening(DHT *dht)
 {
     for (uint32_t i = 0; i < LCLIENT_LIST * 2; ++i) {
@@ -2645,9 +2643,9 @@ static void do_hardening(DHT *dht)
 
         if (cur_iptspng->hardening.send_nodes_ok == 0) {
             if (mono_time_is_timeout(dht->mono_time, cur_iptspng->hardening.send_nodes_timestamp, HARDENING_INTERVAL)) {
-                Node_format rand_node = random_node(dht, sa_family);
+                Node_format rand_node;
 
-                if (!ipport_isset(&rand_node.ip_port)) {
+                if (!random_node(dht, &rand_node, sa_family, false)) {
                     continue;
                 }
 
