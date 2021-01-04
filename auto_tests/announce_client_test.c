@@ -35,7 +35,7 @@ static void on_retrieve_callback(void *object, const uint8_t *data, uint16_t len
     }
 }
 
-static void lookup_test(Tox **toxes, State *state)
+static void basic_lookup_test(Tox **toxes, State *state)
 {
     Announcements *announcements;
     Announce_Client *announce_client;
@@ -72,8 +72,12 @@ static void lookup_test(Tox **toxes, State *state)
     const Lookup *announce_lookup = find_lookup(&announce_client->lookups, pk);
     ck_assert(announce_client != nullptr);
 
+    /* A simple announce and lookup with 2 nodes and perfect network
+     * conditions should reliably succeed with no timeouts needing to be
+     * triggered, so we do not advance time when iterating. */
+
     do {
-        iterate_all_wait(2, toxes, state, ITERATION_INTERVAL);
+        iterate_all_wait(2, toxes, state, 0);
         do_announce_client(announce_client);
     } while (!is_announced(mono_time[1], announce_lookup));
 
@@ -81,7 +85,7 @@ static void lookup_test(Tox **toxes, State *state)
     add_search(announce_client, pk, 2, should_retrieve_callback, on_retrieve_callback, &retrieved);
 
     do {
-        iterate_all_wait(2, toxes, state, ITERATION_INTERVAL);
+        iterate_all_wait(2, toxes, state, 0);
         do_announce_client(announce_client);
     } while (!retrieved);
 
