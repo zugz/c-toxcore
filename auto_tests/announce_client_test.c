@@ -35,14 +35,15 @@ static void on_retrieve_callback(void *object, const uint8_t *data, uint16_t len
     }
 }
 
-static void basic_lookup_test(Tox **toxes, State *state)
+static void basic_lookup_test(const uint32_t num_toxes, bool advance_time,
+                              Tox **toxes, State *state)
 {
-    Announcements *announcements;
-    Announce_Client *announce_client;
-    Forwarding *forwarding[2];
-    Mono_Time *mono_time[2];
+    Announce_Client *announce_client[num_toxes];
+    Announcements *announcements[num_toxes];
+    Forwarding *forwarding[num_toxes];
+    Mono_Time *mono_time[num_toxes];
 
-    for (uint32_t i = 0; i < 2; ++i) {
+    for (uint32_t i = 0; i < num_toxes; ++i) {
         // TODO(iphydf): Don't rely on toxcore internals.
         Messenger *m = *(Messenger **)toxes[i];
         forwarding[i] = new_forwarding(
@@ -51,15 +52,13 @@ static void basic_lookup_test(Tox **toxes, State *state)
         ck_assert(forwarding[i] != nullptr);
         mono_time[i] = m->mono_time;
 
-        if (i == 0) {
-            announcements = new_announcements(m->mono_time, forwarding[i]);
-            ck_assert(announcements != nullptr);
-        } else {
-            announce_client = new_announce_client(
-                                  m->mono_time, forwarding[i],
-                                  m->net_crypto);
-            ck_assert(announce_client != nullptr);
-        }
+        announce_client[i] = new_announce_client(
+                                 m->mono_time, forwarding[i],
+                                 m->net_crypto);
+        ck_assert(announce_client != nullptr);
+
+        announcements[i] = new_announcements(m->mono_time, forwarding[i]);
+        ck_assert(announcements != nullptr);
     }
 
     uint8_t pk[CRYPTO_PUBLIC_KEY_SIZE];
@@ -68,32 +67,64 @@ static void basic_lookup_test(Tox **toxes, State *state)
 
     uint8_t test_data[5];
     memcpy(test_data, "hello", 5);
-    add_announce(announce_client, pk, 2, sk, test_data, sizeof(test_data));
-    const Lookup *announce_lookup = find_lookup(&announce_client->lookups, pk);
+    add_announce(announce_client[0], pk, 2, sk, test_data, sizeof(test_data));
+    const Lookup *announce_lookup = find_lookup(&announce_client[0]->lookups, pk);
     ck_assert(announce_client != nullptr);
 
+    do {
+        iterate_all_wait(num_toxes, toxes, state, advance_time ? ITERATION_INTERVAL : 0);
+        do_announce_client(announce_client[0]);
+    } while (!is_announced(mono_time[1], announce_lookup));
+
+    bool retrieved[num_toxes];
+    memset(retrieved, 0, sizeof(retrieved));
+
+    for (uint32_t i = 0; i < num_toxes; ++i) {
+        add_search(announce_client[i], pk, 2, should_retrieve_callback, on_retrieve_callback, &retrieved[i]);
+    }
+
+    bool all_retrieved;
+
+    do {
+        iterate_all_wait(num_toxes, toxes, state, advance_time ? ITERATION_INTERVAL : 0);
+        all_retrieved = true;
+
+        for (uint32_t i = 0; i < num_toxes; ++i) {
+            if (num_toxes == 2 && i == 1) {
+                // this tox is the only one storing the announcement,
+                // so won't find it
+                continue;
+            }
+
+            do_announce_client(announce_client[i]);
+            all_retrieved &= retrieved[i];
+        }
+    } while (!all_retrieved);
+
+    for (uint32_t i = 0; i < num_toxes; ++i) {
+        kill_announce_client(announce_client[i]);
+        kill_announcements(announcements[i]);
+        kill_forwarding(forwarding[i]);
+    }
+}
+
+static void basic_lookup_test_two(Tox **toxes, State *state)
+{
     /* A simple announce and lookup with 2 nodes and perfect network
      * conditions should reliably succeed with no timeouts needing to be
      * triggered, so we do not advance time when iterating. */
 
-    do {
-        iterate_all_wait(2, toxes, state, 0);
-        do_announce_client(announce_client);
-    } while (!is_announced(mono_time[1], announce_lookup));
+    basic_lookup_test(2, false, toxes, state);
+}
 
-    bool retrieved = false;
-    add_search(announce_client, pk, 2, should_retrieve_callback, on_retrieve_callback, &retrieved);
+#define NUM_LOOKUP_MANY_TOXES 20
 
-    do {
-        iterate_all_wait(2, toxes, state, 0);
-        do_announce_client(announce_client);
-    } while (!retrieved);
+static void basic_lookup_test_many(Tox **toxes, State *state)
+{
+    basic_lookup_test(NUM_LOOKUP_MANY_TOXES, true, toxes, state);
+}
 
-    kill_announce_client(announce_client);
-    kill_announcements(announcements);
 
-    for (uint32_t i = 0; i < 2; ++i) {
-        kill_forwarding(forwarding[i]);
     }
 }
 
@@ -101,6 +132,8 @@ int main(void)
 {
     setvbuf(stdout, nullptr, _IONBF, 0);
 
-    run_auto_test(2, lookup_test, false);
+    run_auto_test(2, basic_lookup_test_two, true);
+
+    run_auto_test(NUM_LOOKUP_MANY_TOXES, basic_lookup_test_many, true);
     return 0;
 }
