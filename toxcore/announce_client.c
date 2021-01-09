@@ -444,9 +444,11 @@ static void process_data_search_response(Announce_Client *announce_client,
     set_announce_node(announce_client->dht, route_destination_pk(route));
 #endif
 
+    const Lookup_Data *const lookup_data = get_lookup_data(lookup);
     Lookup_Route base_routes[MAX_LOOKUP_WIDTH];
     uint16_t num_base_routes = 0;
     bool added = false;
+    bool do_announce = (lookup_data->announce_length > 0 && would_accept);
 
     if (responder_lookup_node == nullptr) {
         added = lookup_add_node(lookup, route, announce_client->public_key);
@@ -469,6 +471,7 @@ static void process_data_search_response(Announce_Client *announce_client,
                 delete_lookup_node(responder_lookup_node);
                 responder_lookup_node = nullptr;
                 num_base_routes = 0;
+                do_announce = false;
             }
         }
     }
@@ -488,8 +491,12 @@ static void process_data_search_response(Announce_Client *announce_client,
         new_route.nodes[new_route.chain_length] = nodes[i];
 
         if (lookup_could_add_node(lookup, &new_route, announce_client->public_key)) {
-            ++sent;
-            send_data_search_request(announce_client, lookup, &new_route);
+            if (send_data_search_request(announce_client, lookup, &new_route)) {
+                ++sent;
+
+                do_announce &= !(added && (id_closest(lookup->data_public_key,
+                                                      route_destination_pk(route), nodes[i].public_key) == 2));
+            }
         }
     }
 
@@ -504,21 +511,17 @@ static void process_data_search_response(Announce_Client *announce_client,
         }
     }
 
-    const Lookup_Data *const lookup_data = get_lookup_data(lookup);
-
-    if (lookup_data->announce_length > 0 &&
-            responder_lookup_node != nullptr &&
-            would_accept) {
+    if (do_announce) {
         const bool reannounce = data_hash != nullptr &&
                                 crypto_memcmp(data_hash, lookup_data->announce_hash, CRYPTO_SHA256_SIZE) == 0;
-        send_announce_store_request(announce_client, lookup, &responder_lookup_node->route,
+        send_announce_store_request(announce_client, lookup, route,
                                     timed_auth, reannounce);
     }
 
-    if (data_hash != nullptr && responder_lookup_node != nullptr &&
+    if (data_hash != nullptr &&
             lookup_data->should_retrieve_callback != nullptr &&
             lookup_data->should_retrieve_callback(lookup_data->callbacks_object, data_hash)) {
-        send_data_retrieve_request(announce_client, lookup, &responder_lookup_node->route, timed_auth);
+        send_data_retrieve_request(announce_client, lookup, route, timed_auth);
     }
 }
 

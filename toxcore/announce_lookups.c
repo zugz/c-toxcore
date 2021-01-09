@@ -198,17 +198,23 @@ uint16_t get_shortest_routes(const Lookup *lookup, Lookup_Route *routes, uint16_
 bool add_pending(Lookup *lookup, const uint8_t *public_key, uint64_t ping_id, const Mono_Time *mono_time)
 {
     Pending_Response *slot = nullptr;
+    bool found_empty = false;
 
     for (uint16_t i = 0; i < lookup->width; ++i) {
         Pending_Response *pending = &lookup->pending[i];
 
         if (mono_time_is_timeout(mono_time, pending->timestamp, PENDING_TIMEOUT)) {
             slot = pending;
-            break;
+            found_empty = true;
         }
 
-        if (id_closest(lookup->data_public_key, pending->public_key,
-                       slot == nullptr ? public_key : slot->public_key) == 2) {
+        if (id_equal(public_key, pending->public_key)) {
+            return false;
+        }
+
+        if (!found_empty &&
+                id_closest(lookup->data_public_key, pending->public_key,
+                           slot == nullptr ? public_key : slot->public_key) == 2) {
             slot = pending;
         }
     }
