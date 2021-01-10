@@ -53,8 +53,8 @@ static void on_retrieve_callback(void *object, const uint8_t *data, uint16_t len
 static void basic_lookup_test(const uint32_t num_toxes, bool advance_time,
                               Tox **toxes, State *state)
 {
-    Announce_Client *announce_client[num_toxes];
     Announcements *announcements[num_toxes];
+    Announce_Client *announce_client[num_toxes];
     Forwarding *forwarding[num_toxes];
     Mono_Time *mono_time[num_toxes];
 
@@ -67,13 +67,14 @@ static void basic_lookup_test(const uint32_t num_toxes, bool advance_time,
         ck_assert(forwarding[i] != nullptr);
         mono_time[i] = m->mono_time;
 
-        announce_client[i] = new_announce_client(
-                                 m->mono_time, forwarding[i],
-                                 m->net_crypto);
-        ck_assert(announce_client != nullptr);
-
         announcements[i] = new_announcements(m->mono_time, forwarding[i]);
         ck_assert(announcements != nullptr);
+
+        announce_client[i] = new_announce_client(
+                                 m->mono_time, forwarding[i],
+                                 m->net_crypto, announcements[i]);
+        ck_assert(announce_client != nullptr);
+
     }
 
     uint8_t pk[CRYPTO_PUBLIC_KEY_SIZE];
@@ -105,12 +106,6 @@ static void basic_lookup_test(const uint32_t num_toxes, bool advance_time,
         all_retrieved = true;
 
         for (uint32_t i = 0; i < num_toxes; ++i) {
-            if (num_toxes == 2 && i == 1) {
-                // this tox is the only one storing the announcement,
-                // so won't find it
-                continue;
-            }
-
             do_announce_client(announce_client[i]);
             all_retrieved &= retrieved[i];
         }
@@ -256,7 +251,7 @@ static void lookup_graph_test(const Digraph *digraph, uint32_t announcer, uint32
         net_c[i] = new_net_crypto(log, mono_time[i], dht[i], &inf);
         forwarding[i] = new_forwarding(mono_time[i], dht[i]);
         announce[i] = new_announcements(mono_time[i], forwarding[i]);
-        announce_client[i] = new_announce_client(mono_time[i], forwarding[i], net_c[i]);
+        announce_client[i] = new_announce_client(mono_time[i], forwarding[i], net_c[i], announce[i]);
     }
 
     connect_dhts(digraph, dht);

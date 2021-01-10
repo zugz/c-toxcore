@@ -5,12 +5,14 @@
 #ifndef C_TOXCORE_TOXCORE_ANNOUNCE_CLIENT_H
 #define C_TOXCORE_TOXCORE_ANNOUNCE_CLIENT_H
 
+#include "announce.h"
 #include "forwarding.h"
 #include "net_crypto.h"
 
 typedef struct Announce_Client Announce_Client;
 
-Announce_Client *new_announce_client(Mono_Time *mono_time, Forwarding *forwarding, Net_Crypto *c);
+Announce_Client *new_announce_client(Mono_Time *mono_time, Forwarding *forwarding,
+                                     Net_Crypto *c, const Announcements *announcements);
 
 /* Replaces any existing announce/search for this key. */
 bool add_announce(Announce_Client *announce_client,
@@ -18,7 +20,6 @@ bool add_announce(Announce_Client *announce_client,
                   const uint8_t *data_secret_key, const uint8_t *data, uint16_t length);
 
 typedef bool should_retrieve_cb(void *object, const uint8_t *hash);
-typedef void on_retrieve_cb(void *object, const uint8_t *data, uint16_t length);
 
 /* Replaces any existing announce/search for this key. */
 bool add_search(Announce_Client *announce_client,

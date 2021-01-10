@@ -4,7 +4,6 @@
 
 #include "announce_client.h"
 
-#include "announce_common.h"
 #include "announce_lookups.h"
 
 #include "DHT.h"
@@ -130,6 +129,7 @@ struct Announce_Client {
     DHT *dht;
     Networking_Core *net;
     Net_Crypto *c;
+    const Announcements *announcements;
     const uint8_t *public_key;
 
     Ping_Array *ping_array;
@@ -391,6 +391,14 @@ static void do_lookup(Announce_Client *announce_client, Lookup *lookup)
     }
 
     lookup->last_iteration = mono_time_get(announce_client->mono_time);
+
+    const Lookup_Data *const lookup_data = get_lookup_data(lookup);
+
+    if (lookup_data->on_retrieve_callback != nullptr
+            && announce_client->announcements != nullptr) {
+        on_stored(announce_client->announcements, lookup->data_public_key,
+                  lookup_data->on_retrieve_callback, lookup_data->callbacks_object);
+    }
 
     for (uint16_t i = 0; i < lookup->width; ++i) {
         Lookup_Node *lookup_node = &lookup->nodes[i];
@@ -734,7 +742,8 @@ static int handle_announce_response(void *object, IP_Port source,
     return (process_announce_response(announce_client, data, length) ? 0 : -1);
 }
 
-Announce_Client *new_announce_client(Mono_Time *mono_time, Forwarding *forwarding, Net_Crypto *c)
+Announce_Client *new_announce_client(Mono_Time *mono_time, Forwarding *forwarding,
+                                     Net_Crypto *c, const Announcements *announcements)
 {
     if (mono_time == nullptr || forwarding == nullptr || c == nullptr) {
         return nullptr;
@@ -752,6 +761,8 @@ Announce_Client *new_announce_client(Mono_Time *mono_time, Forwarding *forwardin
     announce_client->dht = forwarding_get_dht(forwarding);
     announce_client->net = dht_get_net(announce_client->dht);
     announce_client->public_key = dht_get_self_public_key(announce_client->dht);
+
+    announce_client->announcements = announcements; // Allowed to be nullptr
 
     announce_client->ping_array = ping_array_new(ANNOUNCE_CLIENT_PING_ARRAY_SIZE, ANNOUNCE_CLIENT_PING_TIMEOUT);
 

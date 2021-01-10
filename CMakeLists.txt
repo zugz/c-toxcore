@@ -229,8 +229,6 @@ set(toxcore_SOURCES ${toxcore_SOURCES}
   toxcore/announce.h
   toxcore/announce_client.h
   toxcore/announce_client.c
-  toxcore/announce_common.h
-  toxcore/announce_common.c
   toxcore/announce_lookups.c
   toxcore/announce_lookups.h)
 
