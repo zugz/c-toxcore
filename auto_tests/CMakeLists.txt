@@ -20,6 +20,8 @@ endfunction()
 
 auto_test(TCP)
 auto_test(announce)
+auto_test(announce_client)
+auto_test(announce_lookups)
 auto_test(conference)
 auto_test(conference_double_invite)
 auto_test(conference_invite_merge)
