@@ -114,6 +114,11 @@ struct DHT {
     unsigned int num_to_bootstrap;
 
     dht_get_nodes_response_cb *get_nodes_response;
+
+#ifdef CHECK_ANNOUNCE_NODE
+    dht_on_add_to_close_cb *on_add_to_close_callback;
+    void *on_add_to_close_callback_object;
+#endif
 };
 
 const uint8_t *dht_friend_public_key(const DHT_Friend *dht_friend)
@@ -1017,6 +1022,12 @@ static int dht_cmp_entry(const void *a, const void *b)
 }
 
 #ifdef CHECK_ANNOUNCE_NODE
+void set_on_add_to_close_callback(DHT *dht, dht_on_add_to_close_cb *callback, void *object)
+{
+    dht->on_add_to_close_callback = callback;
+    dht->on_add_to_close_callback_object = object;
+}
+
 non_null()
 static void set_announce_node_in_list(Client_data *list, uint32_t list_len, const uint8_t *public_key)
 {
@@ -1040,82 +1051,6 @@ void set_announce_node(DHT *dht, const uint8_t *public_key)
     for (int32_t i = 0; i < dht->num_friends; ++i) {
         set_announce_node_in_list(dht->friends_list[i].client_list, MAX_FRIEND_CLIENTS, public_key);
     }
-}
-
-/** @brief Send data search request, searching for a random key. */
-non_null()
-static bool send_announce_ping(DHT *dht, const uint8_t *public_key, const IP_Port *ip_port)
-{
-    uint8_t plain[CRYPTO_PUBLIC_KEY_SIZE + sizeof(uint64_t)];
-
-    uint8_t unused_secret_key[CRYPTO_SECRET_KEY_SIZE];
-    crypto_new_keypair(dht->rng, plain, unused_secret_key);
-
-    const uint64_t ping_id = ping_array_add(dht->dht_ping_array,
-                                            dht->mono_time,
-                                            dht->rng,
-                                            public_key, CRYPTO_PUBLIC_KEY_SIZE);
-    memcpy(plain + CRYPTO_PUBLIC_KEY_SIZE, &ping_id, sizeof(ping_id));
-
-    uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE];
-    dht_get_shared_key_sent(dht, shared_key, public_key);
-
-    uint8_t request[1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + sizeof(plain) + CRYPTO_MAC_SIZE];
-
-    if (dht_create_packet(dht->rng, dht->self_public_key, shared_key, NET_PACKET_DATA_SEARCH_REQUEST,
-                          plain, sizeof(plain), request, sizeof(request)) != sizeof(request)) {
-        return false;
-    }
-
-    return sendpacket(dht->net, ip_port, request, sizeof(request)) == sizeof(request);
-}
-
-/** @brief If the response is valid, set the sender as an announce node. */
-non_null(1, 2, 3) nullable(5)
-static int handle_data_search_response(void *object, const IP_Port *source,
-                                       const uint8_t *packet, uint16_t length,
-                                       void *userdata)
-{
-    DHT *dht = (DHT *) object;
-
-    const int32_t plain_len = (int32_t)length - (1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + CRYPTO_MAC_SIZE);
-
-    if (plain_len < (int32_t)(CRYPTO_PUBLIC_KEY_SIZE + sizeof(uint64_t))) {
-        return 1;
-    }
-
-    VLA(uint8_t, plain, plain_len);
-    const uint8_t *public_key = packet + 1;
-    uint8_t shared_key[CRYPTO_SHARED_KEY_SIZE];
-    dht_get_shared_key_recv(dht, shared_key, public_key);
-
-    if (decrypt_data_symmetric(shared_key,
-                               packet + 1 + CRYPTO_PUBLIC_KEY_SIZE,
-                               packet + 1 + CRYPTO_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE,
-                               plain_len + CRYPTO_MAC_SIZE,
-                               plain) != plain_len) {
-        return 1;
-    }
-
-    uint64_t ping_id;
-    memcpy(&ping_id, plain + (plain_len - sizeof(uint64_t)), sizeof(ping_id));
-
-    uint8_t ping_data[CRYPTO_PUBLIC_KEY_SIZE];
-
-    if (ping_array_check(dht->dht_ping_array,
-                         dht->mono_time, ping_data,
-                         sizeof(ping_data), ping_id) != sizeof(ping_data)) {
-        return 1;
-    }
-
-    if (!pk_equal(ping_data, public_key)) {
-        return 1;
-    }
-
-    set_announce_node(dht, public_key);
-
-    return 0;
-
 }
 #endif
 
@@ -1261,7 +1196,9 @@ static bool add_to_close(DHT *dht, const uint8_t *public_key, const IP_Port *ip_
         update_client_with_reset(dht->mono_time, client, ip_port);
 #ifdef CHECK_ANNOUNCE_NODE
         client->announce_node = false;
-        send_announce_ping(dht, public_key, ip_port);
+        if (dht->on_add_to_close_callback != nullptr) {
+            dht->on_add_to_close_callback(dht->on_add_to_close_callback_object, public_key, ip_port);
+        }
 #endif
         return true;
     }
@@ -2763,10 +2700,6 @@ DHT *new_dht(const Logger *log, const Random *rng, const Network *ns, Mono_Time 
     networking_registerhandler(dht->net, NET_PACKET_CRYPTO, &cryptopacket_handle, dht);
     networking_registerhandler(dht->net, NET_PACKET_LAN_DISCOVERY, &handle_LANdiscovery, dht);
     cryptopacket_registerhandler(dht, CRYPTO_PACKET_NAT_PING, &handle_NATping, dht);
-
-#ifdef CHECK_ANNOUNCE_NODE
-    networking_registerhandler(dht->net, NET_PACKET_DATA_SEARCH_RESPONSE, &handle_data_search_response, dht);
-#endif
 
     crypto_new_keypair(rng, dht->self_public_key, dht->self_secret_key);
 

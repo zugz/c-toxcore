@@ -248,8 +248,9 @@ static bool send_via_route(const Announce_Client *announce_client, const Lookup_
 /* Write ping_id to last `sizeof(uint64_t)` bytes of `data`, then encrypt and
  * send along `route`.
  */
-non_null(1, 2, 3, 7) nullable(5)
+non_null(1, 2, 4, 8) nullable(3, 6)
 static bool send_plain_request(const Announce_Client *announce_client,
+                               uint8_t *data_public_key,
                                Lookup *lookup, const Lookup_Route *route,
                                uint8_t type, const uint8_t *previous_hash, bool check_pending,
                                uint8_t *data, uint16_t length)
@@ -263,7 +264,7 @@ static bool send_plain_request(const Announce_Client *announce_client,
     memcpy(p, route, sizeof(Lookup_Route));
     p += sizeof(Lookup_Route);
 
-    memcpy(p, lookup->data_public_key, CRYPTO_PUBLIC_KEY_SIZE);
+    memcpy(p, data_public_key, CRYPTO_PUBLIC_KEY_SIZE);
     p += CRYPTO_PUBLIC_KEY_SIZE;
 
     *p = (previous_hash != nullptr);
@@ -282,8 +283,8 @@ static bool send_plain_request(const Announce_Client *announce_client,
         return false;
     }
 
-    if (check_pending && !add_pending(lookup, route_destination_pk(route),
-                                      ping_id, announce_client->mono_time)) {
+    if (lookup != nullptr && check_pending && !add_pending(lookup, route_destination_pk(route),
+            ping_id, announce_client->mono_time)) {
         return false;
     }
 
@@ -329,7 +330,7 @@ static bool send_data_search_request(const Announce_Client *announce_client, Loo
         memcpy(request + CRYPTO_PUBLIC_KEY_SIZE, previous_hash, CRYPTO_SHA256_SIZE);
     }
 
-    const bool sent = send_plain_request(announce_client, lookup, route,
+    const bool sent = send_plain_request(announce_client, lookup->data_public_key, lookup, route,
                                          NET_PACKET_DATA_SEARCH_REQUEST, previous_hash, true,
                                          request, request_len);
 
@@ -390,7 +391,7 @@ static bool send_announce_store_request(Announce_Client *announce_client,
         return false;
     }
 
-    return send_plain_request(announce_client, lookup, route,
+    return send_plain_request(announce_client, lookup->data_public_key, lookup, route,
                               NET_PACKET_STORE_ANNOUNCE_REQUEST, nullptr, false,
                               request, SIZEOF_VLA(request));
 }
@@ -411,7 +412,7 @@ static bool send_data_retrieve_request(const Announce_Client *announce_client,
 
     memcpy(p, timed_auth, TIMED_AUTH_SIZE);
 
-    return send_plain_request(announce_client, lookup, route,
+    return send_plain_request(announce_client, lookup->data_public_key, lookup, route,
                               NET_PACKET_DATA_RETRIEVE_REQUEST, nullptr, false,
                               request, sizeof(request));
 }
@@ -513,16 +514,33 @@ void do_announce_client(Announce_Client *announce_client)
     }
 }
 
+/** @brief Send data search request, searching for a random key. */
+non_null()
+static void ping_added_dht_node(void *object, const uint8_t *public_key, const IP_Port *ipport)
+{
+    const Announce_Client *announce_client = (const Announce_Client *)object;
+    uint8_t request[CRYPTO_PUBLIC_KEY_SIZE + sizeof(uint64_t)];
+    uint8_t unused_secret_key[CRYPTO_SECRET_KEY_SIZE];
+    crypto_new_keypair(announce_client->rng, request, unused_secret_key);
+
+    Lookup_Route route;
+    route.chain_length = 0;
+    Node_format node;
+    memcpy(node.public_key, public_key, CRYPTO_PUBLIC_KEY_SIZE);
+    node.ip_port = *ipport;
+    route.nodes[0] = node;
+
+    send_plain_request(announce_client, request, nullptr, &route,
+                       NET_PACKET_DATA_SEARCH_REQUEST, nullptr, false,
+                       request, sizeof(request));
+}
+
 non_null(1, 2, 3, 6, 8) nullable(4, 5)
 static void process_data_search_response(Announce_Client *announce_client,
         Lookup *lookup, const Lookup_Route *route, Lookup_Node *responder_lookup_node,
         const uint8_t *data_hash, const uint8_t *timed_auth,
         bool would_accept, Node_format *nodes, uint16_t num_nodes)
 {
-#ifdef CHECK_ANNOUNCE_NODE
-    set_announce_node(announce_client->dht, route_destination_pk(route));
-#endif
-
     const Lookup_Data *const lookup_data = get_lookup_data(lookup);
     Lookup_Route base_routes[MAX_LOOKUP_WIDTH];
     uint16_t num_base_routes = 0;
@@ -622,6 +640,10 @@ static bool process_announce_response_plain(Announce_Client *announce_client,
     }
 
     p += CRYPTO_PUBLIC_KEY_SIZE;
+
+#ifdef CHECK_ANNOUNCE_NODE
+    set_announce_node(announce_client->dht, route_destination_pk(route));
+#endif
 
     Lookup *const lookup = find_lookup(&announce_client->lookups, data_public_key);
 
@@ -850,6 +872,10 @@ Announce_Client *new_announce_client(const Random *rng, Mono_Time *mono_time, Fo
         kill_announce_client(announce_client);
         return nullptr;
     }
+
+#ifdef CHECK_ANNOUNCE_NODE
+    set_on_add_to_close_callback(announce_client->dht, ping_added_dht_node, announce_client);
+#endif
 
     set_callback_forwarded_response(forwarding, forwarded_response_callback, announce_client);
     networking_registerhandler(announce_client->net, NET_PACKET_DATA_SEARCH_RESPONSE, handle_dht_announce_response,

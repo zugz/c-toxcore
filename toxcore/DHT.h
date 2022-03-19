@@ -389,6 +389,12 @@ non_null()
 bool node_addable_to_close_list(DHT *dht, const uint8_t *public_key, const IP_Port *ip_port);
 
 #ifdef CHECK_ANNOUNCE_NODE
+typedef void dht_on_add_to_close_cb(void *object, const uint8_t *public_key, const IP_Port *ip_port);
+
+/** @brief Set callback to be called when a node is added to the close list. */
+non_null()
+void set_on_add_to_close_callback(DHT *dht, dht_on_add_to_close_cb *callback, void *object);
+
 /** Set node as announce node. */
 non_null()
 void set_announce_node(DHT *dht, const uint8_t *public_key);
