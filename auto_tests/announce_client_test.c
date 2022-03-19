@@ -67,7 +67,7 @@ static void basic_lookup_test(const uint32_t num_toxes, bool advance_time,
         announce_client[i] = new_announce_client(
                                  m->rng, m->mono_time, forwarding[i],
                                  m->net_crypto, announcements[i]);
-        ck_assert(announce_client != nullptr);
+        ck_assert(announce_client[i] != nullptr);
 
     }
 
@@ -254,6 +254,14 @@ static void lookup_graph_test(const Digraph *digraph, uint32_t announcer, uint32
     }
 
     connect_dhts(digraph, dht);
+
+    // Give chance for nodes to be marked as announce nodes
+    for (uint32_t iterations = 0; iterations < 2; ++iterations) {
+        for (uint32_t i = 0; i < n; ++i) {
+            mono_time_update(mono_time[i]);
+            networking_poll(net[i], nullptr);
+        }
+    }
 
     const uint8_t *const pk = dht_get_self_public_key(dht[target]);
     const uint8_t *const sk = dht_get_self_secret_key(dht[target]);

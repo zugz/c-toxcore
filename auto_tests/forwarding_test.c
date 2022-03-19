@@ -3,7 +3,6 @@
 #include <string.h>
 
 #include "../toxcore/tox.h"
-#include "../toxcore/announce.h"
 #include "../testing/misc_tools.h"
 #include "../toxcore/mono_time.h"
 #include "../toxcore/forwarding.h"
@@ -99,7 +98,6 @@ typedef struct Forwarding_Subtox {
     DHT *dht;
     Net_Crypto *c;
     Forwarding *forwarding;
-    Announcements *announce;
 } Forwarding_Subtox;
 
 static Forwarding_Subtox *new_forwarding_subtox(bool no_udp, uint32_t *index, uint16_t port)
@@ -132,15 +130,11 @@ static Forwarding_Subtox *new_forwarding_subtox(bool no_udp, uint32_t *index, ui
     subtox->forwarding = new_forwarding(subtox->log, rng, subtox->mono_time, subtox->dht);
     ck_assert(subtox->forwarding != nullptr);
 
-    subtox->announce = new_announcements(subtox->log, rng, subtox->mono_time, subtox->forwarding);
-    ck_assert(subtox->announce != nullptr);
-
     return subtox;
 }
 
 static void kill_forwarding_subtox(Forwarding_Subtox *subtox)
 {
-    kill_announcements(subtox->announce);
     kill_forwarding(subtox->forwarding);
     kill_net_crypto(subtox->c);
     kill_dht(subtox->dht);
@@ -301,18 +295,6 @@ static void test_forwarding(void)
 
             c_sleep(50);
         } while (!all_returned(test_data));
-
-        // This doesn't really belong in this test.
-        // It can be removed once the full announce client test is in place.
-        printf("checking that nodes are marked as announce nodes\n");
-        Node_format nodes[MAX_SENT_NODES];
-        ck_assert(NUM_FORWARDER - NUM_FORWARDER_TCP > 1);
-
-        for (uint32_t i = NUM_FORWARDER_TCP; i < NUM_FORWARDER; ++i) {
-            ck_assert_msg(get_close_nodes(subtoxes[i]->dht, dht_get_self_public_key(subtoxes[i]->dht), nodes, net_family_unspec(), true,
-                                          true) > 0,
-                          "node %u has no nodes marked as announce nodes", i);
-        }
     }
 
 
