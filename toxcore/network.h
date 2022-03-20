@@ -112,6 +112,11 @@ typedef enum Net_Packet_Type {
 
     NET_PACKET_ONION_DATA_REQUEST   = 0x85,
     NET_PACKET_ONION_DATA_RESPONSE  = 0x86,
+    // Could it would make more sense to keep the current packets and response 
+    // format for plain announcements, and add new packets just for 
+    // announce-with-data?
+    // That way nodes using the new protocol will still be able to use old 
+    // onion nodes to announce without data.
     NET_PACKET_ANNOUNCE_REQUEST     = 0x87,
     NET_PACKET_ANNOUNCE_RESPONSE    = 0x88,
 

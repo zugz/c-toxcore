@@ -596,7 +596,7 @@ static int handle_announce_request(void *object, const IP_Port *source, const ui
     }
 
     return handle_announce_request_common(onion_a, source, packet, length, NET_PACKET_ANNOUNCE_RESPONSE,
-                                          ONION_PING_ID_SIZE + CRYPTO_PUBLIC_KEY_SIZE * 2 + ONION_ANNOUNCE_SENDBACK_DATA_LENGTH,
+                                          ONION_MINIMAL_SIZE,
                                           true, 0, nullptr);
 }
 
@@ -612,7 +612,7 @@ static int handle_announce_request_old(void *object, const IP_Port *source, cons
     }
 
     return handle_announce_request_common(onion_a, source, packet, length, NET_PACKET_ANNOUNCE_RESPONSE_OLD,
-                                          ONION_PING_ID_SIZE + CRYPTO_PUBLIC_KEY_SIZE * 2 + ONION_ANNOUNCE_SENDBACK_DATA_LENGTH,
+                                          ONION_MINIMAL_SIZE,
                                           false, 0, nullptr);
 }
 
@@ -673,6 +673,7 @@ Onion_Announce *new_onion_announce(const Logger *log, Mono_Time *mono_time, DHT 
     networking_registerhandler(onion_a->net, NET_PACKET_ANNOUNCE_REQUEST_OLD, &handle_announce_request_old, onion_a);
     networking_registerhandler(onion_a->net, NET_PACKET_ONION_DATA_REQUEST, &handle_data_request, onion_a);
 
+    // Already done this a few lines above, why do it again?
     // TODO(Jfreegman): Remove this when we merge the rest of new groupchats
     onion_announce_extra_data_callback(onion_a, 0, nullptr, nullptr);
 
