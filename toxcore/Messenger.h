@@ -12,6 +12,7 @@
 
 #include "TCP_server.h"
 #include "announce.h"
+#include "announce_client.h"
 #include "forwarding.h"
 #include "friend_connection.h"
 #include "friend_requests.h"
@@ -246,6 +247,7 @@ struct Messenger {
 
     Forwarding *forwarding;
     Announcements *announce;
+    Announce_Client *announce_c;
 
     Onion *onion;
     Onion_Announce *onion_a;

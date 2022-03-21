@@ -635,6 +635,7 @@ cc_library(
     deps = [
         ":TCP_server",
         ":announce",
+        ":announce_client",
         ":ccompat",
         ":forwarding",
         ":friend_requests",
