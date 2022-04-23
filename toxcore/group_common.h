@@ -151,6 +151,7 @@ typedef enum Group_Role {
     GR_OBSERVER  = 0x03,
 } Group_Role;
 
+/** Possible statuses for group peers. Must agree with Tox_User_Status. */
 typedef enum Group_Peer_Status {
     GS_NONE    = 0x00,
     GS_AWAY    = 0x01,

@@ -388,6 +388,7 @@ int pack_gc_saved_peers(const GC_Chat *chat, uint8_t *data, uint16_t length, uin
 
         if (ipport_isset(&saved_peer->ip_port)) {
             if (packed_len > length) {
+                // FIXME(zugz): Impossible to reach here?
                 return -1;
             }
 
@@ -400,6 +401,7 @@ int pack_gc_saved_peers(const GC_Chat *chat, uint8_t *data, uint16_t length, uin
 
         if (ipport_isset(&saved_peer->tcp_relay.ip_port)) {
             if (packed_len > length) {
+                // FIXME(zugz): Impossible to reach here?
                 return -1;
             }
 
@@ -420,6 +422,7 @@ int pack_gc_saved_peers(const GC_Chat *chat, uint8_t *data, uint16_t length, uin
             ++count;
         } else {
             LOGGER_WARNING(chat->log, "Failed to pack saved peer");
+            // FIXME(zugz): Should return -1 at this point?
         }
     }
 
@@ -445,6 +448,7 @@ int unpack_gc_saved_peers(GC_Chat *chat, const uint8_t *data, uint16_t length)
         }
 
         if (unpacked_len > length) {
+            // FIXME(zugz): Impossible to reach here?
             return -1;
         }
 
@@ -1504,6 +1508,9 @@ int group_packet_wrap(
     if (net_packet_type == NET_PACKET_GC_LOSSLESS) {
         net_pack_u64(plain + padding_len + sizeof(uint8_t), message_id);
         enc_header_len += GC_MESSAGE_ID_BYTES;
+        // TODO(zugz): Since padding length is calculated before this, whether
+        // or not the packet is lossless can be determined from its length mod
+        // GC_MAX_PACKET_PADDING. Would be better to set the padding after this?
     }
 
     if (length > 0 && data != nullptr) {

@@ -74,6 +74,7 @@ typedef enum Group_Broadcast_Type {
  * Group packet types.
  *
  * For a detailed spec, see docs/DHT_Group_Chats_Packet_Spec.md
+ * FIXME(zugz): this file does not exist!
  */
 typedef enum Group_Packet_Type {
     /* lossy packets (ID 0 is reserved) */
