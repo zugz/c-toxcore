@@ -5253,7 +5253,7 @@ typedef enum Tox_Err_Group_Set_Ignore {
     TOX_ERR_GROUP_SET_IGNORE_PEER_NOT_FOUND,
 
     /**
-     * The caller attempted to ignore himself.
+     * The caller attempted to ignore themself.
      */
     TOX_ERR_GROUP_SET_IGNORE_SELF,
 
