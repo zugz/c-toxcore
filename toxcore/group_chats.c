@@ -69,7 +69,7 @@
 
 /* Maximum number of bytes to pad packets with.
  *
- * Packets are padded with a random number of zero bytes between zero and this value in order to hide
+ * Packets are padded with a number of zero bytes between zero and this value in order to hide
  * the true length of the message, which reduces the amount of metadata leaked through packet analysis.
  *
  * Note: This behaviour was copied from the toxcore encryption implementation in net_crypto.c.
