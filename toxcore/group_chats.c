@@ -1508,9 +1508,6 @@ int group_packet_wrap(
     if (net_packet_type == NET_PACKET_GC_LOSSLESS) {
         net_pack_u64(plain + padding_len + sizeof(uint8_t), message_id);
         enc_header_len += GC_MESSAGE_ID_BYTES;
-        // TODO(zugz): Since padding length is calculated before this, whether
-        // or not the packet is lossless can be determined from its length mod
-        // GC_MAX_PACKET_PADDING. Would be better to set the padding after this?
     }
 
     if (length > 0 && data != nullptr) {
