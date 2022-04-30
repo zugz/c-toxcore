@@ -4389,8 +4389,8 @@ static bool mod_gc_set_observer(GC_Chat *chat, uint32_t peer_number, bool add_ob
             }
         }
 
-        // if sanctioned peer set the topic we need to overwrite their signature and redistribute
-        // topic info
+        // if sanctioned peer set the topic we need to overwrite the peer's signature and
+        // redistribute topic info
         const int setter_peer_number = get_peer_number_of_sig_pk(chat, chat->topic_info.public_sig_key);
 
         if (setter_peer_number >= 0 && (uint32_t)setter_peer_number == peer_number) {
