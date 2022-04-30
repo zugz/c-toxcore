@@ -1072,6 +1072,8 @@ non_null()
 static bool prune_gc_sanctions_list(GC_Chat *chat)
 {
     if (chat->moderation.num_sanctions == 0) {
+        // FIXME(zugz): according to doc, should return false since no sanctioned peers were offline
+        // (or even exist)
         return true;
     }
 
