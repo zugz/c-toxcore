@@ -1378,9 +1378,9 @@ static bool sign_gc_shared_state(GC_Chat *chat)
     }
 
     if (chat->shared_state.version != UINT32_MAX) {
-        /* improbable, but an overflow would break everything */
         set_gc_shared_state_version(chat, chat->shared_state.version + 1);
     } else {
+        /* improbable, but an overflow would break everything */
         LOGGER_WARNING(chat->log, "Shared state version wraparound");
     }
 
