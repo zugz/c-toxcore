@@ -1890,6 +1890,7 @@ static bool sync_response_send_state(GC_Chat *chat, GC_Connection *gconn, uint32
 {
     const bool first_sync = gconn->last_sync_response == 0;
 
+    // FIXME(zugz): There are 5 send calls, not 4.
     // Do not change the order of these four send calls. See: https://toktok.ltd/spec.html#sync_request-0xf8
     if ((sync_flags & GF_STATE) > 0 && chat->shared_state.version > 0) {
         if (!send_peer_shared_state(chat, gconn)) {
