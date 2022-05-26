@@ -3019,11 +3019,9 @@ static int handle_gc_mod_list(const GC_Session *c, GC_Chat *chat, const uint8_t 
 
     const int unpack_ret = validate_unpack_mod_list(chat, data + sizeof(uint16_t), length - sizeof(uint16_t), num_mods);
 
-    if (unpack_ret != -1) {
-        update_gc_peer_roles(chat);
-    }
-
     if (unpack_ret == 0) {
+        update_gc_peer_roles(chat);
+
         if (chat->connection_state == CS_CONNECTED && c->moderation != nullptr) {
             c->moderation(c->messenger, chat->group_number, (uint32_t) -1, (uint32_t) -1, MV_MOD, userdata);
         }
