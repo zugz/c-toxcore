@@ -1480,6 +1480,7 @@ int group_packet_wrap(
     uint8_t gp_packet_type, uint8_t net_packet_type)
 {
     const uint16_t padding_len = group_packet_padding_length(length);
+    // FIXME(zugz) min_packet_size should be 1 byte larger when net_packet_type == NET_PACKET_GC_LOSSLESS (it's enc_header_len += GC_MESSAGE_ID_BYTES)
     const uint16_t min_packet_size = net_packet_type == NET_PACKET_GC_LOSSLESS
                                      ? length + padding_len + CRYPTO_MAC_SIZE + 1 + ENC_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + GC_MESSAGE_ID_BYTES
                                      : length + padding_len + CRYPTO_MAC_SIZE + 1 + ENC_PUBLIC_KEY_SIZE + CRYPTO_NONCE_SIZE + 1;
@@ -1490,6 +1491,7 @@ int group_packet_wrap(
     }
 
     if (length > MAX_GC_PACKET_CHUNK_SIZE) {
+        // FIXME(zugz) packet_size isn't the payload size, and isn't what's compared with MAX_GC_PACKET_CHUNK_SIZE. Should be `length`.
         LOGGER_ERROR(log, "Packet payload size (%u) exceeds maximum (%u)", packet_size, MAX_GC_PACKET_CHUNK_SIZE);
         return -1;
     }
