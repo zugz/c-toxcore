@@ -3501,10 +3501,6 @@ int gc_get_peer_public_key_by_peer_id(const GC_Chat *chat, uint32_t peer_id, uin
 {
     const int peer_number = get_peer_number_of_peer_id(chat, peer_id);
 
-    if (peer_number < 0) {
-        return -1;
-    }
-
     const GC_Connection *gconn = get_gc_connection(chat, peer_number);
 
     if (gconn == nullptr) {
@@ -3523,10 +3519,6 @@ int gc_get_peer_public_key_by_peer_id(const GC_Chat *chat, uint32_t peer_id, uin
 unsigned int gc_get_peer_connection_status(const GC_Chat *chat, uint32_t peer_id)
 {
     const int peer_number = get_peer_number_of_peer_id(chat, peer_id);
-
-    if (peer_number < 0) {
-        return 0;
-    }
 
     if (peer_number_is_self(peer_number)) {  // we cannot have a connection with ourselves
         return 0;
@@ -7417,10 +7409,6 @@ static size_t load_gc_peers(GC_Chat *chat, const GC_SavedPeerInfo *addrs, uint16
 
         const int peer_number = peer_add(chat, ip_port, addrs[i].public_key);
 
-        if (peer_number < 0) {
-            continue;
-        }
-
         GC_Connection *gconn = get_gc_connection(chat, peer_number);
 
         if (gconn == nullptr) {
@@ -7906,10 +7894,6 @@ int handle_gc_invite_confirmed_packet(const GC_Session *c, int friend_number, co
 
     const int peer_number = get_peer_number_of_enc_pk(chat, invite_chat_pk, false);
 
-    if (peer_number < 0) {
-        return -3;
-    }
-
     GC_Connection *gconn = get_gc_connection(chat, peer_number);
 
     if (gconn == nullptr) {
@@ -7973,7 +7957,7 @@ bool handle_gc_invite_accepted_packet(const GC_Session *c, int friend_number, co
 
     const int peer_number = peer_add(chat, nullptr, invite_chat_pk);
 
-    if (!friend_was_invited(m, chat, friend_number) || peer_number < 0) {
+    if (!friend_was_invited(m, chat, friend_number)) {
         return false;
     }
 
