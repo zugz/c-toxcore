@@ -2803,7 +2803,7 @@ static void do_privacy_state_change(const GC_Session *c, GC_Chat *chat, void *us
 
 /**
  * Compares old_shared_state with the chat instance's current shared state and triggers the
- * appropriate callback depending on what piece of state information changed. Also
+ * appropriate callbacks depending on what pieces of state information changed. Also
  * handles DHT announcement/removal if the privacy state changed.
  *
  * The initial retrieval of the shared state on group join will be ignored by this function.
@@ -2901,7 +2901,7 @@ static int handle_gc_shared_state_error(GC_Chat *chat, GC_Connection *gconn)
 /** @brief Handles a shared state packet and validates the new shared state.
  *
  * Return 0 if packet is successfully handled.
- * Return -1 if packet has invalid size.
+ * Return -1 if packet is invalid and this is not successfully handled.
  */
 non_null(1, 2, 3, 4) nullable(6)
 static int handle_gc_shared_state(const GC_Session *c, GC_Chat *chat, GC_Connection *gconn, const uint8_t *data,
@@ -3368,8 +3368,7 @@ static int send_gc_self_exit(const GC_Chat *chat, const uint8_t *partmessage, ui
 
 /** @brief Handles a peer exit broadcast.
  *
- * Return 0 if packet is handled correctly.
- * Return -1 if peer number is invalid.
+ * Return 0.
  */
 non_null(1, 2) nullable(3)
 static int handle_gc_peer_exit(const GC_Chat *chat, GC_Connection *gconn, const uint8_t *data, uint16_t length)

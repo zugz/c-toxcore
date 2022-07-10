@@ -221,10 +221,10 @@ int gc_set_ignore(const GC_Chat *chat, uint32_t peer_id, bool ignore);
 
 /** @brief Sets the group topic and broadcasts it to the group.
  *
- * If `length` is equal to zero or topic is null the topic will be unset.
+ * If `length` is equal to zero the topic will be unset.
  *
  * Returns 0 on success.
- * Returns -1 if the topic is too long (must be `<= MAX_GC_TOPIC_LENGTH`).
+ * Returns -1 if the topic is too long (must be `<= MAX_GC_TOPIC_SIZE`).
  * Returns -2 if the caller does not have the required permissions to set the topic.
  * Returns -3 if the packet cannot be created or signing fails.
  * Returns -4 if the packet fails
