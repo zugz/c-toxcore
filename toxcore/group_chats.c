@@ -2525,6 +2525,7 @@ uint8_t gc_get_role(const GC_Chat *chat, uint32_t peer_id)
     const GC_Peer *peer = get_gc_peer(chat, peer_number);
 
     if (peer == nullptr) {
+        // FIXME(zugz): Be consistent on whether we call it UINT8_MAX or (uint8_t) -1.
         return (uint8_t) -1;
     }
 
@@ -3087,6 +3088,7 @@ non_null(1, 2, 3) nullable(5)
 static int handle_gc_sanctions_list(const GC_Session *c, GC_Chat *chat, const uint8_t *data, uint16_t length,
                                     void *userdata)
 {
+    // FIXME(zugz): Should be sizeof(uint16_t)?
     if (length < sizeof(uint32_t)) {
         return -2;
     }
@@ -3144,6 +3146,10 @@ static int handle_gc_sanctions_list(const GC_Session *c, GC_Chat *chat, const ui
 
     if (chat->connection_state == CS_CONNECTED) {
         if (c->moderation != nullptr) {
+            // FIXME: passing MV_OBSERVER seems confusing, since it could be that someone was 
+            // deleted from the sanctions list.
+            // Either add a new moderation event type ("MV_CHANGED"?) for this, or explain in the 
+            // API docs for tox_group_moderation_cb that it may get called with -1,-1 like this?
             c->moderation(c->messenger, chat->group_number, (uint32_t) -1, (uint32_t) -1, MV_OBSERVER, userdata);
         }
     }
@@ -4050,6 +4056,7 @@ static int validate_unpack_gc_set_mod(GC_Chat *chat, uint32_t peer_number, const
             return -3;
         }
 
+        // FIXME(zugz): redundant, since peer_number refers to founder
         if (peer_number == (uint32_t)target_peer_number) {
             return -1;
         }
@@ -4071,6 +4078,7 @@ static int validate_unpack_gc_set_mod(GC_Chat *chat, uint32_t peer_number, const
             return -3;
         }
 
+        // FIXME(zugz): redundant, since peer_number refers to founder
         if (peer_number == (uint32_t)target_peer_number) {
             return -1;
         }
@@ -4125,6 +4133,7 @@ static int handle_gc_set_mod(const GC_Session *c, GC_Chat *chat, uint32_t peer_n
         return 0;
     }
 
+    // FIXME(zugz): already called in validate_unpack_gc_set_mod
     update_gc_peer_roles(chat);
 
     if (c->moderation != nullptr) {
@@ -4242,6 +4251,7 @@ static int validate_unpack_observer_entry(GC_Chat *chat, const uint8_t *data, ui
 
         if (sanctions_list_entry_exists(&chat->moderation, &sanction)
                 || !sanctions_list_add_entry(&chat->moderation, &sanction, &creds)) {
+            // FIXME(zugz): should return 1 if entry already exists?
             return -1;
         }
     } else {
@@ -4321,6 +4331,7 @@ static int handle_gc_set_observer(const GC_Session *c, GC_Chat *chat, uint32_t p
         return -2;
     }
 
+    // FIXME(zugz): pointless when ret == 1?
     update_gc_peer_roles(chat);
 
     if (ret == 1) {
@@ -4618,6 +4629,7 @@ int gc_founder_set_topic_lock(const Messenger *m, int group_number, Group_Topic_
         chat->shared_state.topic_lock = GC_TOPIC_LOCK_ENABLED;
 
         if (gc_set_topic(chat, chat->topic_info.topic, chat->topic_info.length) != 0) {
+            // FIXME(zugz): should set topic_lock back to old_topic_lock?
             return -6;
         }
     } else {

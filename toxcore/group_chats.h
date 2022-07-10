@@ -314,7 +314,7 @@ uint16_t gc_get_max_peers(const GC_Chat *chat);
  * Returns -1 if group_number is invalid.
  * Returns -2 if the length is too long.
  * Returns -3 if the length is zero or nick is a NULL pointer.
- * Returns -4 if the nick is already taken.
+ * Returns -4 if the nick is already taken. FIXME(zugz): -4 is never returned
  * Returns -5 if the packet fails to send.
  */
 non_null()
